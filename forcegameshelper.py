@@ -1,5 +1,6 @@
 import logging
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram.ext.Filters import chat_type
 from telegram import ReplyKeyboardMarkup
 import os
 
@@ -153,7 +154,7 @@ def is_admin(from_chat, user_id):
 
 def help(update, context):
     """Send a message when the command /help is issued."""
-    update.message.reply_text('Help!')
+    update.message.reply_text('No implementado uwu')
 
 def process_private_message(update, context):
     if STATUS_ID in context.chat_data:
