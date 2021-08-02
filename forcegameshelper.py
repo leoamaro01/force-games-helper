@@ -9,6 +9,9 @@ class RegisteredChannel:
         self.template = template
         self.template_picture = template_picture
 
+    def __str__(self):
+        return  "chat_id={} template={} template_picture={}".format(self.chat_id, self.template, self.template_picture)
+
 PORT = int(os.environ.get('PORT', 8443))
 
 # Enable logging
@@ -35,7 +38,6 @@ registered_channels = {}
 
 def start(update, context):
     """Send a message when the command /start is issued."""
-    update.message.reply_text('Hi!')
     if len(context.args) >= 2 and context.args[0] == "admin" and context.args[1] == TOKEN:
         update.message.reply_text("Logged in as Admin!")
         global admin_chat_id
@@ -88,6 +90,10 @@ def customize_channel(update, context):
         update.message.reply_text("El canal " + username + " no está registrado o no eres administrador. 😗")
         go_to_base(update, context)
 
+def print_debug(update, context):
+    if admin_chat_id == update.message.chat.id:
+        update.message.reply_text(registered_channels)
+
 def request_change_template(update, context):
     update.message.reply_text("Envíe la nueva plantilla, debe contener el texto \"$plantilla$\" que será donde se colocará el resumen 🤖")
     context.chat_data[STATUS_ID] = "requested_template"
@@ -115,13 +121,19 @@ def request_register_channel(update, context):
     context.chat_data[STATUS_ID] = "requested_register"
 
 def register_channel(update, context):
-    channel = context.bot.get_chat(update.message.text)
-    if channel in registered_channels and is_admin(channel, update.message.from_user.id):
+    try:
+        channel = context.bot.get_chat(update.message.text)
+    except TelegramError:
+        update.message.reply_text("No se encontró el canal :|")
+        go_to_base(update, context)
+        return
+
+    if is_admin(channel, update.message.from_user.id):
         registered_channels[channel] = RegisteredChannel(id=channel.id)
         update.message.reply_text("Canal registrado! :D Ahora en el menú debes configurar la plantilla antes de que pueda ser usada 📄")
         go_to_base(update, context)
     else:
-        update.message.reply_text("No se encontró el canal o no eres administrador de este D:")
+        update.message.reply_text("No eres administrador de este canal D:")
         go_to_base(update, context)
 
 def request_unregister_channel(update, context):
@@ -129,24 +141,20 @@ def request_unregister_channel(update, context):
     context.chat_data[STATUS_ID] = "requested_unregister"
 
 def unregister_channel(update, context):
-    channel = context.bot.get_chat(update.message.text)
-    if channel is not None and is_admin(channel, update.message.from_user.id):
-        registered_channels[channel] = RegisteredChannel(id=channel.id)
-        update.message.reply_text("Canal registrado! :D Ahora en el menú debes configurar la plantilla antes de que pueda ser usada 📄")
+    channel = update.message.text
+    if channel in registered_channels and is_admin(channel, update.message.from_user.id):
+        registered_channels.pop(channel)
+        update.message.reply_text("Canal eliminado del registro satisfactoriamente ;-;")
         go_to_base(update, context)
     else:
         update.message.reply_text("Canal no encontrado o no eres admin D:<")
         go_to_base(update, context)
 
 def is_admin(from_chat, user_id):
-    logger.info("0")
     if from_chat.type == "channel":
-        logger.info("1")
         member = from_chat.get_member(user_id)
         if member is not None:
-            logger.info("2")
             if member in from_chat.get_administrators():
-                logger.info("3")
                 return True
             else:
                 update.message.reply_text("No eres administrador de ese canal :/ eres tonto o primo de JAVIER?")
@@ -215,7 +223,8 @@ def main():
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("cancel", go_to_base))
     dp.add_handler(CommandHandler("help", help))
-
+    dp.add_handler(CommandHandler("debug", print_debug))
+    
     dp.add_handler(MessageHandler(Filters.text & Filters.chat_type.private, process_private_message))
     dp.add_handler(MessageHandler(Filters.photo & Filters.chat_type.private, process_private_photo))
 
