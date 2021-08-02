@@ -210,7 +210,6 @@ def main():
     dp.add_handler(CommandHandler("help", help))
 
     dp.add_handler(MessageHandler(Filters.text & Filters.chat_type.private, process_private_message))
-    dp.add_handler(MessageHandler(Filters.forwarded & Filters.chat_type.private, process_private_forwarded))
     dp.add_handler(MessageHandler(Filters.photo & Filters.chat_type.private, process_private_photo))
 
     # log all errors
