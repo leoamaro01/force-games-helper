@@ -16,6 +16,9 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
                     level=logging.INFO)
 
 logger = logging.getLogger(__name__)
+
+logger.warning("Port is " + PORT)
+
 TOKEN = '1609173394:AAH4V-ShZIGXOBE9JPOUg3wVN_Q3BycCZG4'
 STATUS_ID = "fgh_status"
 CANCEL_MARKUP = "🔙 Atrás 🔙"
