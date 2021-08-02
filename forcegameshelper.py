@@ -53,9 +53,9 @@ def go_to_base(update, context):
     markup = ReplyKeyboardMarkup([
         [CUSTOMIZE_MARKUP],
         [REGISTER_MARKUP, UNREGISTER_MARKUP]
-    ])
+    ], one_time_keyboard=True)
     update.message.reply_text(text="Menú 🤓\nPuedes usar /cancel en cualquier momento para volver aquí :D",
-                             reply_markup=markup, one_time_keyboard=True)
+                             reply_markup=markup)
     context.chat_data[STATUS_ID] = "idle"
 
 """
@@ -78,10 +78,10 @@ def customize_channel(update, context):
             [CHANGE_TEMPLATE_MARKUP],
             [CHANGE_TEMPLATE_PICTURE_MARKUP],
             [CANCEL_MARKUP]
-            ]
+            ], one_time_keyboard=True
         )
         context.message.reply_text(text="¿Qué desea configurar? 🧐",
-                                   reply_markup=markup, one_time_keyboard=True)
+                                   reply_markup=markup)
         context.chat_data[STATUS_ID] = "customizing"
         context.chat_data[CONTEXT_DATA_ID] = username
     else:
