@@ -1,6 +1,5 @@
 import logging
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-from telegram.ext.Filters import chat_type
 from telegram import ReplyKeyboardMarkup
 import os
 
