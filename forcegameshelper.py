@@ -54,7 +54,7 @@ def go_to_base(update, context):
         [CUSTOMIZE_MARKUP],
         [REGISTER_MARKUP, UNREGISTER_MARKUP]
     ])
-    context.message.reply_text(text="Menú 🤓\nPuedes usar /cancel en cualquier momento para volver aquí :D",
+    update.message.reply_text(text="Menú 🤓\nPuedes usar /cancel en cualquier momento para volver aquí :D",
                              reply_markup=markup, one_time_keyboard=True)
     context.chat_data[STATUS_ID] = "idle"
 
