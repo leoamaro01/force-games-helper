@@ -53,7 +53,7 @@ def go_to_base(update, context):
     markup = ReplyKeyboardMarkup([
         [CUSTOMIZE_MARKUP],
         [REGISTER_MARKUP, UNREGISTER_MARKUP]
-    ], one_time_keyboard=True)
+    ], resize_keyboard=True, one_time_keyboard=True)
     update.message.reply_text(text="Menú 🤓\nPuedes usar /cancel en cualquier momento para volver aquí :D",
                              reply_markup=markup)
     context.chat_data[STATUS_ID] = "idle"
@@ -78,7 +78,7 @@ def customize_channel(update, context):
             [CHANGE_TEMPLATE_MARKUP],
             [CHANGE_TEMPLATE_PICTURE_MARKUP],
             [CANCEL_MARKUP]
-            ], one_time_keyboard=True
+            ], resize_keyboard=True, one_time_keyboard=True
         )
         context.message.reply_text(text="¿Qué desea configurar? 🧐",
                                    reply_markup=markup)
@@ -139,20 +139,24 @@ def unregister_channel(update, context):
         go_to_base(update, context)
 
 def is_admin(from_chat, user_id):
+    logger.info("0")
     if from_chat.type == "channel":
+        logger.info("1")
         member = from_chat.get_member(user_id)
         if member is not None:
+            logger.info("2")
             if member in from_chat.get_administrators():
-                return true
+                logger.info("3")
+                return True
             else:
                 update.message.reply_text("No eres administrador de ese canal :/ eres tonto o primo de JAVIER?")
-                return false
+                return False
         else:
             update.message.reply_text("No perteneces a ese canal :/ eres tonto o primo de JAVIER?")
-            return false
+            return False
     else:
         update.message.reply_text("Ese mensaje no viene de un canal :/ eres tonto o primo de JAVIER?")
-        return false
+        return False
 
 def help(update, context):
     """Send a message when the command /help is issued."""
