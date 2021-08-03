@@ -124,7 +124,7 @@ def request_change_template_picture(update, context):
     context.chat_data[STATUS_ID] = "requested_template_picture"
 
 def change_template_picture(update, context):
-    registered_channels[context.chat_data[CONTEXT_DATA_ID]].template_picture = update.message.photo
+    registered_channels[context.chat_data[CONTEXT_DATA_ID]].template_picture = update.message.photo.file_id
     update.message.reply_text("Foto establecida! :3")
     go_to_base(update, context)
 
