@@ -87,7 +87,7 @@ def customize_channel(update, context):
                 [SEND_NOW_MARKUP],
                 [CHANGE_TEMPLATE_MARKUP, SEE_TEMPLATE_MARKUP],
                 [CHANGE_TEMPLATE_PICTURE_MARKUP, SEE_TEMPLATE_PICTURE_MARKUP],
-                [CHANGE_SUMMARY_TIME_MARKUP]
+                [CHANGE_SUMMARY_TIME_MARKUP],
                 [CANCEL_MARKUP]
             ], resize_keyboard=True, one_time_keyboard=True
         )
