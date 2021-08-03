@@ -20,8 +20,6 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 logger = logging.getLogger(__name__)
 
-logger.warning("Port is " + str(PORT))
-
 TOKEN = '1609173394:AAH4V-ShZIGXOBE9JPOUg3wVN_Q3BycCZG4'
 STATUS_ID = "fgh_status"
 CANCEL_MARKUP = "🔙 Atrás 🔙"
@@ -129,7 +127,7 @@ def register_channel(update, context):
         return
 
     if is_admin(channel, update.message.from_user.id):
-        registered_channels[channel] = RegisteredChannel(id=channel.id)
+        registered_channels[update.message.text] = RegisteredChannel(id=channel.id)
         update.message.reply_text("Canal registrado! :D Ahora en el menú debes configurar la plantilla antes de que pueda ser usada 📄")
         go_to_base(update, context)
     else:
@@ -142,7 +140,7 @@ def request_unregister_channel(update, context):
 
 def unregister_channel(update, context):
     channel = update.message.text
-    if channel in registered_channels and is_admin(channel, update.message.from_user.id):
+    if channel in registered_channels and is_admin(context.bot.get_chat(channel), update.message.from_user.id):
         registered_channels.pop(channel)
         update.message.reply_text("Canal eliminado del registro satisfactoriamente ;-;")
         go_to_base(update, context)
@@ -224,7 +222,7 @@ def main():
     dp.add_handler(CommandHandler("cancel", go_to_base))
     dp.add_handler(CommandHandler("help", help))
     dp.add_handler(CommandHandler("debug", print_debug))
-    
+
     dp.add_handler(MessageHandler(Filters.text & Filters.chat_type.private, process_private_message))
     dp.add_handler(MessageHandler(Filters.photo & Filters.chat_type.private, process_private_photo))
 
