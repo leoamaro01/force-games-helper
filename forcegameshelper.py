@@ -80,7 +80,7 @@ def customize_channel(update, context):
             [CANCEL_MARKUP]
             ], resize_keyboard=True, one_time_keyboard=True
         )
-        context.message.reply_text(text="¿Qué desea configurar? 🧐",
+        update.message.reply_text(text="¿Qué desea configurar? 🧐",
                                    reply_markup=markup)
         context.chat_data[STATUS_ID] = "customizing"
         context.chat_data[CONTEXT_DATA_ID] = username
