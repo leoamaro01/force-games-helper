@@ -1,16 +1,17 @@
 import logging
+from datetime import datetime, timedelta
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from telegram import ReplyKeyboardMarkup
 import os
 
 class RegisteredChannel:
-    def __init__(self, id,template = None, template_picture = None):
+    def __init__(self, id,template = None, template_picture = None, template_time_dif = 12):
         self.chat_id = id
         self.template = template
         self.template_picture = template_picture
-
+        self.template_time_dif = template_time_dif
     def __str__(self):
-        return  "chat_id={} template={} template_picture={}".format(self.chat_id, self.template, self.template_picture)
+        return  "chat_id={} template={} template_time_dif={} template_picture={}".format(self.chat_id, self.template, self.template_time_dif, self.template_picture)
 
 PORT = int(os.environ.get('PORT', 8443))
 
@@ -27,8 +28,15 @@ REGISTER_MARKUP = "➕ Registrar Canal ➕"
 UNREGISTER_MARKUP = "✖️ Cancelar Registro de Canal ✖️"
 CUSTOMIZE_MARKUP = "⚙ Configurar Canal Registrado ⚙"
 CHANGE_TEMPLATE_MARKUP = "📋 Cambiar Plantilla 📋"
+SEE_TEMPLATE_MARKUP = "📃 Ver plantilla actual 📃"
+SEE_TEMPLATE_PICTURE_MARKUP = "📹 Ver foto de plantilla actual 📹"
+CHANGE_SUMMARY_TIME_MARKUP = "🕑 Cambiar horario de los resumenes 🕑"
 CHANGE_TEMPLATE_PICTURE_MARKUP = "📷 Cambiar Foto de Plantilla 📷"
 CONTEXT_DATA_ID = "fgh_context_data"
+LAST_SUMMARY_ID = "fgh_last_summary"
+LAST_SUMMARY_TIME = "fgh_last_summary_time"
+LAST_SUMMARY_MESSAGES_ID = "fgh_last_summary_messages"
+SAVED_MESSAGES_ID = "fgh_saved_messages"
 
 admin_chat_id = -1
 
@@ -75,13 +83,13 @@ def customize_channel(update, context):
     if username in registered_channels and is_admin(context.bot.get_chat(username), update.message.from_user.id):
         markup = ReplyKeyboardMarkup(
             [
-            [CHANGE_TEMPLATE_MARKUP],
-            [CHANGE_TEMPLATE_PICTURE_MARKUP],
+            [CHANGE_TEMPLATE_MARKUP, SEE_TEMPLATE_MARKUP],
+            [CHANGE_TEMPLATE_PICTURE_MARKUP, SEE_TEMPLATE_PICTURE_MARKUP],
+            [CHANGE_SUMMARY_TIME_MARKUP]
             [CANCEL_MARKUP]
             ], resize_keyboard=True, one_time_keyboard=True
         )
-        update.message.reply_text(text="¿Qué desea configurar? 🧐",
-                                   reply_markup=markup)
+        update.message.reply_text(text="¿Qué desea configurar? 🧐", reply_markup=markup)
         context.chat_data[STATUS_ID] = "customizing"
         context.chat_data[CONTEXT_DATA_ID] = username
     else:
@@ -90,7 +98,8 @@ def customize_channel(update, context):
 
 def print_debug(update, context):
     if admin_chat_id == update.message.chat.id:
-        update.message.reply_text(registered_channels)
+        for channel in registered_channels:
+            update.message.reply_text(str(channel))
 
 def request_change_template(update, context):
     update.message.reply_text("Envíe la nueva plantilla, debe contener el texto \"$plantilla$\" que será donde se colocará el resumen 🤖")
@@ -105,6 +114,9 @@ def change_template(update, context):
         update.message.reply_text("Plantilla incompleta! Debe contener el texto $plantilla$ que sera sustituido por los contenidos de la plantilla. 😐")
         go_to_base(update, context)
 
+def see_template(update, context):
+    update.message.reply_text(registered_channels[context.chat_data[CONTEXT_DATA_ID]].template)
+
 def request_change_template_picture(update, context):
     update.message.reply_text("Envíe la nueva foto de plantilla. 📸")
     context.chat_data[STATUS_ID] = "requested_template_picture"
@@ -113,6 +125,22 @@ def change_template_picture(update, context):
     registered_channels[context.chat_data[CONTEXT_DATA_ID]].template_picture = update.message.photo
     update.message.reply_text("Foto establecida! :3")
     go_to_base(update, context)
+
+def see_template_picture(update, context):
+    update.message.reply_photo(registered_channels[context.chat_data[CONTEXT_DATA_ID]].template_picture)
+
+def request_change_summary_time(update, context):
+    update.message.reply_text("Diga cada cuántas horas debo enviar el resumen, sólo envíe el numero\nejemplo: \"12\"\nValor actual:{}".format(registered_channels[context.chat_data[CONTEXT_DATA_ID]].template_time_dif))
+    context.chat_data[STATUS_ID] = "requested_summary_time"
+
+def change_summary_time(update, context):
+    try:
+        registered_channels[context.chat_data[CONTEXT_DATA_ID]].template_time_dif = int(update.message.text)
+        update.message.reply_text("Tiempo entre resumenes cambiado :3")
+    except ValueError:
+        update.message.reply_text("Eso no es un número válido :/")
+    finally:
+        go_to_base(update, context)
 
 def request_register_channel(update, context):
     update.message.reply_text("Diga la @ del canal que desea registrar :D")
@@ -190,18 +218,97 @@ def process_private_message(update, context):
                 request_change_template(update, context)
             elif text == CHANGE_TEMPLATE_PICTURE_MARKUP:
                 request_change_template_picture(update, context)
+            elif text == SEE_TEMPLATE_MARKUP:
+                see_template(update, context)
+            elif text == SEE_TEMPLATE_PICTURE_MARKUP:
+                see_template_picture(update, context)
+            elif text == CHANGE_SUMMARY_TIME_MARKUP:
+                request_change_summary_time(update, context)
         elif status == "requested_template":
             change_template(update, context)
         elif status == "requested_register":
             register_channel(update, context)
         elif status == "requested_unregister":
             unregister_channel(update, context)
+        elif status == "requested_summary_time":
+            change_summary_time(update, context)
 
 def process_private_photo(update, context):
     if STATUS_ID in context.chat_data:
         status = context.chat_data[STATUS_ID]
         if status == "requested_template_picture":
             change_template_picture(update, context)
+
+def process_channel_photo(update, context):
+    if get_at_username(update.message.chat.username) not in registered_channels:
+        return
+
+    add_to_saved_messages(update, context)
+
+    if LAST_SUMMARY_ID in context.chat_data and context.chat_data[LAST_SUMMARY_ID] is not None:
+        add_to_last_summary_messages(update, context)
+        context.bot.edit_message_text(chat_id=update.message.chat.id, message_id=context.chat_data[LAST_SUMMARY_ID],
+                                      text=get_template_string(update.message.chat, context.chat_data[LAST_SUMMARY_MESSAGES_ID]))
+
+    post_summary(update, context)
+
+def process_channel_message(update, context):
+    if get_at_username(update.message.chat.username) not in registered_channels:
+        return
+
+    add_to_saved_messages(update, context)
+
+    if LAST_SUMMARY_ID in context.chat_data and context.chat_data[LAST_SUMMARY_ID] is not None:
+        add_to_last_summary_messages(update, context)
+        context.bot.edit_message_text(chat_id=update.message.chat.id, message_id=context.chat_data[LAST_SUMMARY_ID],
+                                      text=get_template_string(update.message.chat, context.chat_data[LAST_SUMMARY_MESSAGES_ID]))
+    post_summary(update, context)
+
+def post_summary(update, context):
+    atusername = get_at_username(update.message.chat.username)
+
+    if LAST_SUMMARY_TIME in context.chat_data and context.chat_data[LAST_SUMMARY_TIME] is not None:
+        delta = datetime.now() - context.chat_data[LAST_SUMMARY_TIME]
+        if delta / timedelta(hours=1) >= registered_channels[atusername].template_time_dif:
+            reg_channel = registered_channels[atusername]
+            if reg_channel.template_picture is not None:
+                update.message.reply_photo(registered_channels[atusername].template_picture)
+            if reg_channel.template is not None and reg_channel.template is not "":
+                context.chat_data[LAST_SUMMARY_ID] = update.message.reply_text(get_template_string(update.message.chat, context.chat_data[SAVED_MESSAGES_ID])).message_id
+
+            context.chat_data[LAST_SUMMARY_MESSAGES_ID] = context.chat_data[SAVED_MESSAGES_ID]
+            context.chat_data[SAVED_MESSAGES_ID] = []
+            context.chat_data[LAST_SUMMARY_TIME] = datetime.now()
+
+def add_to_saved_messages(update, context):
+    if SAVED_MESSAGES_ID in context.chat_data and context.chat_data[SAVED_MESSAGES_ID] is not None:
+        context.chat_data[SAVED_MESSAGES_ID].append(update.message.message_id)
+    else:
+        context.chat_data[SAVED_MESSAGES_ID] = [update.message.message_id]
+
+def add_to_last_summary_messages(update, context):
+    if LAST_SUMMARY_MESSAGES_ID in context.chat_data and context.chat_data[LAST_SUMMARY_MESSAGES_ID] is not None and len(context.chat_data[LAST_SUMMARY_MESSAGES_ID]) > 0:
+        context.chat_data[LAST_SUMMARY_MESSAGES_ID].append(update.message.message_id)
+
+def get_template_string(chat, messages_id):
+    return registered_channels[get_at_username(chat.username)].template.replace(
+        "$plantilla$",
+        "\n".join([get_message_link(chat, id) for id in messages_id]))
+
+def get_message_link(chat, message_id):
+    return chat.link + "/" + str(id)
+
+def get_at_username(username):
+    if username[0] == "@":
+        return username
+    else:
+        return "@" + username
+
+def get_no_at_username(username):
+    if username[0] == "@":
+        return username[1:]
+    else:
+        return  username
 
 def error(update, context):
     """Log Errors caused by Updates."""
@@ -226,6 +333,8 @@ def main():
     dp.add_handler(MessageHandler(Filters.text & Filters.chat_type.private, process_private_message))
     dp.add_handler(MessageHandler(Filters.photo & Filters.chat_type.private, process_private_photo))
 
+    dp.add_handler(MessageHandler(Filters.chat_type.channel & Filters.photo, process_channel_photo))
+    dp.add_handler(MessageHandler(Filters.chat_type.channel & Filters.text, process_channel_message))
     # log all errors
     dp.add_error_handler(error)
 
