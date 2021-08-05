@@ -28,13 +28,11 @@ logger = logging.getLogger(__name__)
 TOKEN = os.environ.get('TOKEN', '')
 bot = Bot(token=TOKEN)
 
-file = open("newfile.txt", "w")
-file.write(TOKEN)
-file.close()
-
-file = open("newfile.txt", "r")
-logger.info(file.read())
-file.close()
+try:
+    file = open("newfile.txt", "r")
+    logger.info(file.read())
+finally:
+    file.close()
 
 STATUS_ID = "fgh_status"
 CANCEL_MARKUP = "🔙 Atrás 🔙"
