@@ -280,7 +280,7 @@ def backup(update, context):
     if update.message.chat.id != admin_chat_id:
         return
     serialize_bot_data("bot_data.json")
-    file = open("bot_data.json", rb)
+    file = open("bot_data.json", "rb")
     bot.send_document(chat_id=update.message.chat.id, document=file, filename="bot_data.json")
     file.close()
 
