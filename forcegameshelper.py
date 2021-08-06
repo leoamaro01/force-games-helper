@@ -389,10 +389,10 @@ def process_channel_photo(update, context):
     if atusername not in registered_channels:
         return
     reg_channel = registered_channels[atusername]
-    add_to_saved_messages(update, context)
+    add_to_saved_messages(atusername, update.channel_post.message_id)
 
     if reg_channel.last_summary_message_id != -1:
-        add_to_last_summary_messages(update, context)
+        add_to_last_summary_messages(atusername, update.message.message_id)
         bot.edit_message_text(chat_id=chat.id,
                               message_id=reg_channel.last_summary_message_id,
                               text=get_template_string(atusername,
@@ -405,7 +405,7 @@ def process_channel_message(update, context):
     if atusername not in registered_channels:
         return
     reg_channel = registered_channels[atusername]
-    add_to_saved_messages(atusername, update.message.message_id)
+    add_to_saved_messages(atusername, update.channel_post.message_id)
 
     if reg_channel.last_summary_message_id != -1:
         add_to_last_summary_messages(atusername, update.message.message_id)
