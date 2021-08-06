@@ -431,7 +431,7 @@ def post_summary(channel_username):
 
     if reg_channel.template != "":
         if reg_channel.template_picture is not None:
-            bot.send_photo(chat_id=reg_channel.template_picture)
+            bot.send_photo(chat_id=reg_channel.chat_id, photo=reg_channel.template_picture)
         registered_channels[atusername].last_summary_message_id = bot.send_message(chat_id=reg_channel.chat_id,
             text=get_template_string(atusername, reg_channel.saved_messages)).message_id
         registered_channels[atusername].last_saved_messages = reg_channel.saved_messages
