@@ -289,6 +289,7 @@ def restore(update, context):
     if original is not None and original.document is not None:
         t_file = original.document.get_file()
         deserialize_bot_data(t_file.download())
+        update.message.reply_text("Restored previous data!")
     else:
         update.message.reply_text("That command must be a reply to the backup file")
 
