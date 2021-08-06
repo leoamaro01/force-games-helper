@@ -1,21 +1,45 @@
 import logging
+import json
 from datetime import datetime, timedelta
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from telegram import ReplyKeyboardMarkup, Bot
 import os
 
+class RegisteredChannelEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, RegisteredChannel):
+            return {
+                '__reg_channel__':True,
+                'chat_id':obj.chat_id,
+                'template':obj.template,
+                'template_picture':obj.template_picture,
+                'template_time_dif':obj.template_time_dif,
+                'saved_messages':obj.saved_messages,
+                'last_saved_messages':obj.last_saved_messages,
+                'last_summary_message_id':obj.last_summary_message_id,
+                'last_summary_time':obj.last_summary_time.isoformat()
+            }
+        return json.JSONEncoder.default(self, obj)
+
+def as_registered_channel(dct):
+    if '__reg_channel__' in dct:
+        return RegisteredChannel(id=dct['chat_id'], template=dct['template'], template_picture=dct['template_picture'],
+                                 template_time_dif=dct['template_time_dif'], saved_messages=dct['saved_messages'],
+                                 last_saved_messages=dct['last_saved_messages'], last_summary_message_id=dct['last_summary_message_id'],
+                                 last_summary_time=datetime.fromisoformat(dct['last_summary_time']))
+    return dct
+
 class RegisteredChannel:
-    def __init__(self, id,template = "", template_picture = None, template_time_dif = 12):
+    def __init__(self, id = 0, template = "", template_picture = "", template_time_dif = 12, saved_messages = [],
+                 last_saved_messages = [], last_summary_message_id = -1, last_summary_time = datetime.now()):
         self.chat_id = id
         self.template = template
         self.template_picture = template_picture
         self.template_time_dif = template_time_dif
-        self.saved_messages = []
-        self.last_saved_messages = []
-        self.last_summary_message_id = -1
-        self.last_summary_time = datetime.now()
-    def __str__(self):
-        return  "chat_id={} template={} template_time_dif={} template_picture={}".format(self.chat_id, self.template, self.template_time_dif, self.template_picture)
+        self.saved_messages = saved_messages
+        self.last_saved_messages = last_saved_messages
+        self.last_summary_message_id = last_summary_message_id
+        self.last_summary_time = last_summary_time
 
 PORT = int(os.environ.get('PORT', 8443))
 
@@ -28,12 +52,6 @@ logger = logging.getLogger(__name__)
 TOKEN = os.environ.get('TOKEN', '')
 bot = Bot(token=TOKEN)
 
-try:
-    file = open("newfile.txt", "r")
-    logger.info(file.read())
-finally:
-    file.close()
-
 STATUS_ID = "fgh_status"
 CANCEL_MARKUP = "🔙 Atrás 🔙"
 REGISTER_MARKUP = "➕ Registrar Canal ➕"
@@ -41,7 +59,7 @@ UNREGISTER_MARKUP = "✖️ Cancelar Registro de Canal ✖️"
 CUSTOMIZE_MARKUP = "⚙ Configurar Canal Registrado ⚙"
 CHANGE_TEMPLATE_MARKUP = "📋 Cambiar Plantilla 📋"
 SEE_TEMPLATE_MARKUP = "📃 Ver plantilla actual 📃"
-SEND_NOW_MARKUP = "✅ Enviar resumen al canal despues del próximo mensaje ✅"
+SEND_NOW_MARKUP = "✅ Enviar resumen ahora. ✅"
 SEE_TEMPLATE_PICTURE_MARKUP = "📹 Ver foto de plantilla actual 📹"
 CHANGE_SUMMARY_TIME_MARKUP = "🕑 Cambiar horario de los resumenes 🕑"
 CHANGE_TEMPLATE_PICTURE_MARKUP = "📷 Cambiar Foto de Plantilla 📷"
@@ -80,7 +98,13 @@ ask the user for the channel username (in the future will add inline buttons for
 the user already registered or customized) 
 """
 def request_customize_channel(update, context):
-    update.message.reply_text("¿Cuál es la @ del canal que desea configurar? 🧐")
+    markup = ReplyKeyboardMarkup(
+        [
+            [CANCEL_MARKUP]
+        ], resize_keyboard=True
+    )
+    update.message.reply_text("¿Cuál es la @ del canal que desea configurar? 🧐",
+                              reply_markup=markup)
     context.chat_data[STATUS_ID] = "requested_customization"
 
 """if the user is administrator then present reply
@@ -251,6 +275,39 @@ def is_admin(from_chat, user_id):
 def help(update, context):
     """Send a message when the command /help is issued."""
     update.message.reply_text('No implementado uwu (fokiu)')
+
+def backup(update, context):
+    if update.message.chat.id != admin_chat_id:
+        return
+    serialize_bot_data("bot_data.json")
+    file = open("bot_data.json", rb)
+    bot.send_document(chat_id=update.message.chat.id, document=file, filename="bot_data.json")
+    file.close()
+
+def restore(update, context):
+    original = update.message.reply_to_message
+    if original is not None and original.document is not None:
+        t_file = original.document.get_file()
+        deserialize_bot_data(t_file.download())
+    else:
+        update.message.reply_text("That command must be a reply to the backup file")
+
+def deserialize_bot_data(filename):
+    file = open(filename, "r")
+    dict = json.load(file, object_hook=as_registered_channel)
+    global admin_chat_id, registered_channels
+    admin_chat_id = dict['admin_id']
+    registered_channels = dict['registered_channels']
+    file.close()
+
+def serialize_bot_data(filename):
+    file = open(filename, "w")
+    bot_data = {
+        'admin_id':admin_chat_id,
+        'registered_channels':registered_channels
+    }
+    json.dump(bot_data, file, cls=RegisteredChannelEncoder)
+    file.close()
 
 def process_private_message(update, context):
     if STATUS_ID in context.chat_data:
@@ -428,6 +485,8 @@ def main():
     dp.add_handler(CommandHandler("cancel", go_to_base))
     dp.add_handler(CommandHandler("help", help))
     dp.add_handler(CommandHandler("debug", print_debug))
+    dp.add_handler(CommandHandler("backup", backup))
+    dp.add_handler(CommandHandler("restore", restore))
 
     dp.add_handler(MessageHandler(Filters.text & Filters.chat_type.private, process_private_message))
     dp.add_handler(MessageHandler(Filters.photo & Filters.chat_type.private, process_private_photo))
