@@ -392,7 +392,7 @@ def process_channel_photo(update, context):
     add_to_saved_messages(atusername, update.channel_post.message_id)
 
     if reg_channel.last_summary_message_id != -1:
-        add_to_last_summary_messages(atusername, update.message.message_id)
+        add_to_last_summary_messages(atusername, update.channel_post.message_id)
         bot.edit_message_text(chat_id=chat.id,
                               message_id=reg_channel.last_summary_message_id,
                               text=get_template_string(atusername,
@@ -408,7 +408,7 @@ def process_channel_message(update, context):
     add_to_saved_messages(atusername, update.channel_post.message_id)
 
     if reg_channel.last_summary_message_id != -1:
-        add_to_last_summary_messages(atusername, update.message.message_id)
+        add_to_last_summary_messages(atusername, update.channel_post.message_id)
         bot.edit_message_text(chat_id=chat.id,
                               message_id=reg_channel.last_summary_message_id,
                               text=get_template_string(atusername,
@@ -432,8 +432,10 @@ def post_summary(channel_username):
     if reg_channel.template != "":
         if reg_channel.template_picture is not None:
             bot.send_photo(chat_id=reg_channel.chat_id, photo=reg_channel.template_picture)
-        registered_channels[atusername].last_summary_message_id = bot.send_message(chat_id=reg_channel.chat_id,
+        summary_id =bot.send_message(chat_id=reg_channel.chat_id,
             text=get_template_string(atusername, reg_channel.saved_messages)).message_id
+        bot.pin_chat_message(reg_channel.chat_id, summary_id)
+        registered_channels[atusername].last_summary_message_id = summary_id
         registered_channels[atusername].last_saved_messages = reg_channel.saved_messages
         registered_channels[atusername].saved_messages = []
         registered_channels[atusername].last_summary_time = datetime.now()
