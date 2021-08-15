@@ -202,10 +202,14 @@ El identificador de la categoría será lo que el bot debe encontrar en la prime
 Dentro del menú de categorías estas pueden ser reordenadas e incluso eliminadas"""
 MAX_KNOWN_CHANNELS = 5
 
+BACKUP_TIME_DIF = 10 #minutes
+
 admin_chat_id = -1
 
 registered_channels: dict[str, RegisteredChannel] = {}
 registered_users: dict[str, RegisteredUser] = {}
+
+update_checker: list[datetime] = []
 
 
 def start(update, context):
@@ -252,6 +256,17 @@ def broadcast(update, context):
                                  message_id=update.message.reply_to_message.message_id)
 
 
+def auto_update():
+    if len(update_checker) == 0:
+        update_checker.append(datetime.now())
+        deserialize_bot_data("bot_data.json")
+    else:
+        delta = datetime.now() - update_checker[0]
+        if delta / timedelta(minutes=1) > BACKUP_TIME_DIF:
+            logger.info("Performing timed Bot Data Backup")
+            serialize_bot_data("bot_data.json")
+
+
 def add_to_known_channels(reg_user, channel):
     """
     Args:
@@ -291,7 +306,7 @@ def post_summary(channel_username):
         return
 
     if reg_channel.template != "":
-        if reg_channel.template_picture is not None:
+        if reg_channel.template_picture is not None and reg_channel.template_picture is not "":
             bot.send_photo(chat_id=reg_channel.chat_id, photo=reg_channel.template_picture)
         summary_id = bot.send_message(chat_id=reg_channel.chat_id,
                                       text=get_template_string(atusername, reg_channel.saved_messages),
@@ -370,12 +385,14 @@ def get_template_string(username, messages):
         index = 0
         for cat in reg_channel.categories:
             if "$plantilla{}$".format(index) in template:
-                cat_messages = ["[{}]({})".format(escape_for_telegram(m.text), get_message_link(username, m.message_id)) for m in messages
+                cat_messages = ["[{}]({})".format(escape_for_telegram(m.text), get_message_link(username, m.message_id))
+                                for m in messages
                                 if m.category == cat]
                 template = template.replace("$plantilla{}$".format(index), "\n".join(cat_messages))
             index += 1
     elif "$plantilla$" in template:
-        final_messages = ["[{}]({})".format(escape_for_telegram(m.text), get_message_link(username, m.message_id)) for m in
+        final_messages = ["[{}]({})".format(escape_for_telegram(m.text), get_message_link(username, m.message_id)) for m
+                          in
                           messages]
         template = template.replace("$plantilla$", "\n".join(final_messages))
     return template
@@ -389,25 +406,25 @@ def escape_for_telegram(text):
     Returns:
         str: Escaped text
     """
-    return text\
-        .replace('\\', '\\\\')\
-        .replace('[', '\\[')\
-        .replace(']', '\\]')\
-        .replace('(', '\\(')\
-        .replace(')', '\\)')\
-        .replace('`', '\\`')\
-        .replace('>', '\\>')\
-        .replace('#', '\\#')\
-        .replace('+', '\\+')\
-        .replace('-', '\\-')\
-        .replace('=', '\\=')\
-        .replace('|', '\\|')\
-        .replace('{', '\\{')\
-        .replace('}', '\\}')\
-        .replace('.', '\\.')\
-        .replace('!', '\\!')\
-        .replace('*', '\\*')\
-        .replace('_', '\\_')\
+    return text \
+        .replace('\\', '\\\\') \
+        .replace('[', '\\[') \
+        .replace(']', '\\]') \
+        .replace('(', '\\(') \
+        .replace(')', '\\)') \
+        .replace('`', '\\`') \
+        .replace('>', '\\>') \
+        .replace('#', '\\#') \
+        .replace('+', '\\+') \
+        .replace('-', '\\-') \
+        .replace('=', '\\=') \
+        .replace('|', '\\|') \
+        .replace('{', '\\{') \
+        .replace('}', '\\}') \
+        .replace('.', '\\.') \
+        .replace('!', '\\!') \
+        .replace('*', '\\*') \
+        .replace('_', '\\_') \
         .replace('~', '\\~')
 
 
@@ -577,10 +594,10 @@ def get_categories_list_text(reg_channel, highlight: Optional[int] = -1):
         str: Formatted list of categories.
     """
     return "\n".join(["{}{}\\-{}{}".format(
-        ("", "*")[highlight == i],
+        ("", "__*")[highlight == i],
         i,
-        (escape_for_telegram(reg_channel.categories[i])),
-        ("", "*")[highlight == i])
+        (escape_for_telegram(reg_channel.categories[i]), reg_channel.categories[i])[highlight == -1],
+        ("", "*__")[highlight == i])
         for i in range(len(reg_channel.categories))])
 
 
@@ -625,7 +642,7 @@ def add_category(update, context):
     reg_channel.categories.append(update.message.text)
     update.message.reply_text(
         "Categoría {} añadida! Para que esta funcione $plantilla{}$ debe estar en el texto de la plantilla"
-        .format(update.message.text, len(reg_channel.categories) - 1))
+            .format(update.message.text, len(reg_channel.categories) - 1))
     go_to_categories(update, context)
 
 
@@ -687,11 +704,10 @@ def request_reorder_categories(update, context):
         ], resize_keyboard=True
     )
     update.message.reply_text(
-        """
-        Estas son las categorías que ha añadido:
-        {}
-        "Cuál es el número de la categoría que desea mover?
-        """.format(get_categories_list_text(reg_channel)),
+        "Estas son las categorías que ha añadido:\n\n"
+        "{}\n\n"
+        "Cuál es el número de la categoría que desea mover?".
+        format(get_categories_list_text(reg_channel)),
         reply_markup=markup)
     reg_user.status = "requested_reorder_categories"
 
@@ -738,11 +754,9 @@ def reorder_categories(update, context):
             ], resize_keyboard=True
         )
     update.message.reply_text(
-        """
-        Utilice los botones para mover el elemento seleccionado:
-        {}
-        Presione {} para terminar
-        """.format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
+        "Utilice los botones para mover el elemento seleccionado:\n\n"
+        "{}\n\n"
+        "Presione {} para terminar".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
         reply_markup=markup,
         parse_mode="MarkdownV2")
     reg_user.status = "reordering_categories"
@@ -789,11 +803,9 @@ def move_category_up(update, context):
             )
         reg_user.context_data['index'] = index
     update.message.reply_text(
-        """
-        Utilice los botones para mover el elemento seleccionado:
-        {}
-        Presione {} para terminar
-        """.format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
+        "Utilice los botones para mover el elemento seleccionado:\n\n"
+        "{}\n\n"
+        "Presione {} para terminar".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
         reply_markup=markup,
         parse_mode="MarkdownV2")
 
@@ -838,11 +850,9 @@ def move_category_down(update, context):
             )
         reg_user.context_data['index'] = index
     update.message.reply_text(
-        """
-        Utilice los botones para mover el elemento seleccionado:
-        {}
-        Presione {} para terminar
-        """.format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
+        "Utilice los botones para mover el elemento seleccionado:\n\n"
+        "{}\n\n"
+        "Presione {} para terminar".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
         reply_markup=markup,
         parse_mode="MarkdownV2")
 
@@ -872,13 +882,9 @@ def change_template(update, context):
         context (telegram.ext.CallbackContext)
     """
     reg_user = get_reg_user(update.message.from_user)
-    if "$plantilla$" in update.message.text:
-        registered_channels[reg_user.context_data['channel']].template = update.message.text
-        update.message.reply_text("Plantilla cambiada! :3")
-        go_to_customization(update, context)
-    else:
-        update.message.reply_text(
-            "Plantilla incompleta! Debe contener el texto $plantilla$ que sera sustituido por los contenidos de la plantilla. 😐")
+    registered_channels[reg_user.context_data['channel']].template = update.message.text
+    update.message.reply_text("Plantilla cambiada! :3")
+    go_to_customization(update, context)
 
 
 def see_template(update, context):
@@ -943,7 +949,7 @@ def request_change_summary_time(update, context):
     )
     update.message.reply_text(
         "Diga cada cuántas horas debo enviar el resumen, sólo envíe el numero\nejemplo: \"12\"\nValor actual:{}"
-        .format(registered_channels[reg_user.context_data['channel']].template_time_dif),
+            .format(registered_channels[reg_user.context_data['channel']].template_time_dif),
         reply_markup=markup)
     reg_user.status = "requested_summary_time"
 
@@ -1155,8 +1161,10 @@ def deserialize_bot_data(filename):
         registered_channels = dct['registered_channels']
         registered_users = dct['registered_users']
         file.close()
+        return True
     except OSError:
         logger.warning("Could not load bot data.")
+        return False
 
 
 def serialize_bot_data(filename):
@@ -1180,6 +1188,7 @@ def process_private_message(update, context):
         update (telegram.Update)
         context (telegram.ext.CallbackContext)
     """
+    auto_update()
     if update.message.from_user.id in registered_users:
         reg_user = get_reg_user(update.message.from_user)
         status = reg_user.status
@@ -1292,6 +1301,7 @@ def process_private_photo(update, context):
         context (telegram.ext.CallbackContext)
 
     """
+    auto_update()
     if update.message.from_user.id in registered_users:
         reg_user = get_reg_user(update.message.from_user)
         status = reg_user.status
@@ -1309,6 +1319,7 @@ def process_channel_photo(update, context):
         context (telegram.ext.CallbackContext)
 
     """
+    auto_update()
     chat = update.channel_post.chat
     atusername = get_at_username(chat.username)
     if atusername not in registered_channels:
@@ -1333,6 +1344,7 @@ def process_channel_message(update, context):
         context (telegram.ext.CallbackContext)
 
     """
+    auto_update()
     chat = update.channel_post.chat
     atusername = get_at_username(chat.username)
     if atusername not in registered_channels:
@@ -1386,7 +1398,7 @@ def main():
                           url_path=TOKEN,
                           webhook_url='https://forcegameshelper.herokuapp.com/' + TOKEN)
 
-    deserialize_bot_data("bot_data.json")
+    auto_update()
 
     updater.idle()
 
