@@ -1,45 +1,125 @@
 import logging
 import json
 from datetime import datetime, timedelta
+from typing import Optional
+
+import telegram
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-from telegram import ReplyKeyboardMarkup, Bot
+from telegram import ReplyKeyboardMarkup, Bot, TelegramError
 import os
 
-class RegisteredChannelEncoder(json.JSONEncoder):
+
+class BotDataEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, RegisteredChannel):
             return {
-                '__reg_channel__':True,
-                'chat_id':obj.chat_id,
-                'template':obj.template,
-                'template_picture':obj.template_picture,
-                'template_time_dif':obj.template_time_dif,
-                'saved_messages':obj.saved_messages,
-                'last_saved_messages':obj.last_saved_messages,
-                'last_summary_message_id':obj.last_summary_message_id,
-                'last_summary_time':obj.last_summary_time.isoformat()
+                '__reg_channel__': True,
+                'chat_id': obj.chat_id,
+                'template': obj.template,
+                'template_picture': obj.template_picture,
+                'template_time_dif': obj.template_time_dif,
+                'saved_messages': obj.saved_messages,
+                'last_saved_messages': obj.last_saved_messages,
+                'last_summary_message_id': obj.last_summary_message_id,
+                'categories': obj.categories,
+                'last_summary_time': obj.last_summary_time.isoformat()
+            }
+        elif isinstance(obj, RegisteredUser):
+            return {
+                '__reg_user__': True,
+                'chat_id': obj.chat_id,
+                'status': obj.status,
+                'context_data': obj.context_data,
+                'known_channels': obj.known_channels
             }
         return json.JSONEncoder.default(self, obj)
 
-def as_registered_channel(dct):
+
+def decode_bot_data(dct):
     if '__reg_channel__' in dct:
-        return RegisteredChannel(id=dct['chat_id'], template=dct['template'], template_picture=dct['template_picture'],
+        return RegisteredChannel(chat_id=dct['chat_id'], template=dct['template'],
+                                 template_picture=dct['template_picture'],
                                  template_time_dif=dct['template_time_dif'], saved_messages=dct['saved_messages'],
-                                 last_saved_messages=dct['last_saved_messages'], last_summary_message_id=dct['last_summary_message_id'],
+                                 last_saved_messages=dct['last_saved_messages'],
+                                 last_summary_message_id=dct['last_summary_message_id'],
+                                 categories=dct['categories'],
                                  last_summary_time=datetime.fromisoformat(dct['last_summary_time']))
+    elif '__reg_user__' in dct:
+        return RegisteredUser(chat_id=dct['chat_id'], status=dct['status'],
+                              context_data=dct['context_data'], known_channels=dct['known_channels'])
     return dct
 
+
+class SavedMessage:
+    def __init__(self, message_id, text, category: Optional[str] = ""):
+        """
+        Args:
+            message_id (int)
+            text (str)
+        """
+        self.message_id = message_id
+        self.text = text
+        self.category = category
+
+
 class RegisteredChannel:
-    def __init__(self, id = 0, template = "", template_picture = "", template_time_dif = 12, saved_messages = [],
-                 last_saved_messages = [], last_summary_message_id = -1, last_summary_time = datetime.now()):
-        self.chat_id = id
+    def __init__(self, chat_id=0, template="", template_picture="", template_time_dif=12, saved_messages=None,
+                 last_saved_messages=None, last_summary_message_id=-1, categories=None, last_summary_time=None):
+        """
+        Args:
+            chat_id (int)
+            template (str)
+            template_picture (str)
+            template_time_dif (int)
+            saved_messages (list of SavedMessage)
+            last_saved_messages (list of SavedMessage)
+            last_summary_message_id (int)
+            categories (list of str)
+            last_summary_time (datetime)
+        """
+        self.chat_id = chat_id
         self.template = template
         self.template_picture = template_picture
         self.template_time_dif = template_time_dif
-        self.saved_messages = saved_messages
-        self.last_saved_messages = last_saved_messages
         self.last_summary_message_id = last_summary_message_id
-        self.last_summary_time = last_summary_time
+        if saved_messages is not None:
+            self.saved_messages = saved_messages
+        else:
+            self.saved_messages = []
+        if last_saved_messages is not None:
+            self.last_saved_messages = last_saved_messages
+        else:
+            self.last_saved_messages = []
+        if last_summary_time is not None:
+            self.last_summary_time = last_summary_time
+        else:
+            self.last_summary_time = datetime.now()
+        if categories is not None:
+            self.categories = categories
+        else:
+            self.categories = []
+
+
+class RegisteredUser:
+    def __init__(self, chat_id=0, status="", context_data=None, known_channels=None):
+        """
+        Args:
+            chat_id (int)
+            status (str)
+            context_data (dict[str, str])
+            known_channels (list of str)
+        """
+        self.chat_id = chat_id
+        self.status = status
+        if context_data is not None:
+            self.context_data = context_data
+        else:
+            self.context_data = {}
+        if known_channels is not None:
+            self.known_channels = known_channels
+        else:
+            self.known_channels = []
+
 
 PORT = int(os.environ.get('PORT', 8443))
 
@@ -52,7 +132,6 @@ logger = logging.getLogger(__name__)
 TOKEN = os.environ.get('TOKEN', '')
 bot = Bot(token=TOKEN)
 
-STATUS_ID = "fgh_status"
 CANCEL_MARKUP = "🔙 Atrás 🔙"
 REGISTER_MARKUP = "➕ Registrar Canal ➕"
 UNREGISTER_MARKUP = "✖️ Cancelar Registro de Canal ✖️"
@@ -63,153 +142,798 @@ SEND_NOW_MARKUP = "✅ Enviar resumen ahora. ✅"
 SEE_TEMPLATE_PICTURE_MARKUP = "📹 Ver foto de plantilla actual 📹"
 CHANGE_SUMMARY_TIME_MARKUP = "🕑 Cambiar horario de los resumenes 🕑"
 CHANGE_TEMPLATE_PICTURE_MARKUP = "📷 Cambiar Foto de Plantilla 📷"
-CONTEXT_DATA_ID = "fgh_context_data"
+CATEGORIES_MENU_MARKUP = "🔠 Categorías 🔠"
+SEE_CATEGORIES_MARKUP = "🔢 Ver Categorías 🔢"
+ADD_CATEGORY_MARKUP = "➕ Añadir Categoría ➕"
+REMOVE_CATEGORY_MARKUP = "✖️ Eliminar Categoría ✖️"
+REORDER_CATEGORIES_MARKUP = "⬆️ Reordenar Categorías ⬇️"
+MOVE_UP_MARKUP = "🔼 Mover Arriba 🔼"
+MOVE_DOWN_MARKUP = "🔽 Mover Abajo 🔽"
+HELP_MARKUP = "ℹ Cómo utilizar el Bot ℹ"
+HELP_TEXT = """Este bot te permitira publicar resumenes de todo lo publicado en tu canal de forma automática, para aprender a utilizarlo, sigue esta guía!
+
+Paso 1⃣: Registra tu canal.
+En el menu principal del bot tendrás un boton que titulado Registrar Canal, ahi debes dar la @ de tu canal, por ejemplo @Force_GamesS3. Para poder registrar un canal debes ser administrador del canal y el bot debe pertenecer al canal.
+
+Paso 2⃣: Configura el resumen.
+Este paso es obligatorio para que el bot funcione en tu canal. En el menu principal le dan al boton de Configurar Canal Registrado, y una vez adentro al boton de Cambiar Plantilla.
+
+Como debe ser la plantilla:
+La plantilla debe contener uno o varios (si usas categorías) lugares determinados por el usuario que será donde se colocarán los contenidos del resumen, estos lugares se identificaran por el texto $plantilla$ (o $plantilla0$, $plantilla1$, $plantilla2$, etc si usas categorias), por ejemplo:
+——————————
+Resumen del dia:
+
+Juegos:
+$plantilla0$
+
+Anime:
+$plantilla1$
+
+Programas:
+$plantilla2$
+
+Se seguirá actualizando :3
+——————————
+Ese es un ejemplo te plantilla perfectamente válido.
+
+(Opcional) Además puedes poner una foto que será enviada cada vez que se envíe el resumen al canal.
+
+Puedes cambiar cada cuántas horas se envían los resumenes en el menú de Cambiar Horario de Resumenes, puedes hacer que se envíen cada 12h (por defecto), o incluso cada 1h, como prefieras.
+
+Paso 3⃣: Categorías.
+En el menú de Categorías (dentro de la configuración) puedes personalizar las categorías de tu plantilla, esto lo puedes hacer si tu canal envía diferentes tipos de contenido. Si no añades ninguna categoría todo lo que subas al canal se colocará en donde pusiste el texto $plantilla$
+Antes de poder hacer nada deberás añadir una categoría, esta será tu primera categoría y tendra asignado el número 0, y en el texto de tu plantilla los post de esta categoría se colocarán donde pusiste el texto de $plantilla0$
+El identificador de la categoría será lo que el bot debe encontrar en la primera linea de una publicacion del canal para considerarlo de esta categoría, por ejemplo, si el identificador de la categoría de Juegos es "🎮Game🎮", entonces en la primera linea de cada publicación de un juego debe estar ese exacto texto.
+Dentro del menú de categorías estas pueden ser reordenadas e incluso eliminadas"""
+MAX_KNOWN_CHANNELS = 5
 
 admin_chat_id = -1
 
-registered_channels = {}
+registered_channels: dict[str, RegisteredChannel] = {}
+registered_users: dict[str, RegisteredUser] = {}
+
 
 def start(update, context):
-    """Send a message when the command /start is issued."""
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    user = update.message.from_user
+    if user.id not in registered_users:
+        registered_users[user.id] = RegisteredUser(chat_id=update.message.chat.id)
     if len(context.args) >= 2 and context.args[0] == "admin" and context.args[1] == TOKEN:
-        update.message.reply_text("Logged in as Admin!")
         global admin_chat_id
-        admin_chat_id = update.message.chat.id
+        if admin_chat_id == user.id:
+            update.message.reply_text("Ya eres mi onii-chan!...baka")
+        else:
+            update.message.reply_text("Ahora eres mi onii-chan! :3")
+            admin_chat_id = user.id
 
     go_to_base(update, context)
 
-"""
-set reply markups for:
-    register channel (requires sudo)
-    customize channel (requires sudo)
-    unregister channel (requires sudo)
-"""
+
+def print_debug(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    if admin_chat_id == update.message.chat.id:
+        for channel in registered_channels:
+            update.message.reply_text(str(channel))
+
+
+def broadcast(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    if update.message.from_user.id == admin_chat_id:
+        if update.message.reply_to_message is not None:
+            for user in registered_users.values():
+                bot.copy_message(chat_id=user.chat_id, from_chat_id=update.message.chat.id,
+                                 message_id=update.message.reply_to_message.message_id)
+
+
+def add_to_known_channels(reg_user, channel):
+    """
+    Args:
+        reg_user (RegisteredUser)
+        channel (str)
+    """
+    reg_user.known_channels.insert(0, channel)
+    while len(reg_user.known_channels) > MAX_KNOWN_CHANNELS:
+        reg_user.known_channels.pop(-1)
+
+
+def try_post_summary(username):
+    """
+
+    Args:
+        username (str)
+
+    """
+    atusername = get_at_username(username)
+    reg_channel = registered_channels[atusername]
+
+    delta = datetime.now() - reg_channel.last_summary_time
+    if delta / timedelta(hours=1) >= reg_channel.template_time_dif:
+        post_summary(atusername)
+
+
+def post_summary(channel_username):
+    """
+
+    Args:
+        channel_username (str)
+
+    """
+    atusername = get_at_username(channel_username)
+    reg_channel = registered_channels[atusername]
+    if len(reg_channel.saved_messages) == 0:
+        return
+
+    if reg_channel.template != "":
+        if reg_channel.template_picture is not None:
+            bot.send_photo(chat_id=reg_channel.chat_id, photo=reg_channel.template_picture)
+        summary_id = bot.send_message(chat_id=reg_channel.chat_id,
+                                      text=get_template_string(atusername, reg_channel.saved_messages)).message_id
+        bot.pin_chat_message(reg_channel.chat_id, summary_id)
+        registered_channels[atusername].last_summary_message_id = summary_id
+        registered_channels[atusername].last_saved_messages = reg_channel.saved_messages
+        registered_channels[atusername].saved_messages = []
+        registered_channels[atusername].last_summary_time = datetime.now()
+
+
+def add_to_saved_messages(username, message):
+    """
+
+    Args:
+        username (str)
+        message (telegram.Message)
+
+    """
+    atusername = get_at_username(username)
+    reg_channel = registered_channels[atusername]
+
+    if message.caption is None:
+        text = message.text.splitlines()[0]
+    else:
+        text = message.caption.splitlines()[0]
+
+    if len(reg_channel.categories) > 0:
+        for cat in reg_channel.categories:
+            if cat in text:
+                reg_channel.saved_messages.append(
+                    SavedMessage(message.message_id, text, cat))
+                return
+    else:
+        reg_channel.saved_messages.append(
+            SavedMessage(message.message_id, text))
+        return
+
+
+def add_to_last_summary_messages(username, message):
+    """
+
+    Args:
+        username (str)
+        message (telegram.Message)
+
+    """
+    atusername = get_at_username(username)
+    reg_channel = registered_channels[atusername]
+
+    if message.caption is None:
+        text = message.text.splitlines()[0]
+    else:
+        text = message.caption.splitlines()[0]
+
+    for cat in reg_channel.categories:
+        if cat in text:
+            reg_channel.last_saved_messages.append(
+                SavedMessage(message.message_id, text, cat))
+            return
+
+
+def get_template_string(username, messages):
+    """
+    Args:
+        username (str)
+        messages (list of SavedMessage)
+
+    Returns:
+        str: The formatted template for chanel `username`
+    """
+    atusername = get_at_username(username)
+    reg_channel = registered_channels[atusername]
+    template = reg_channel.template
+    if len(reg_channel.categories) > 0:
+        index = 0
+        for cat in reg_channel.categories:
+            if "$plantilla{}$".format(index) in template:
+                cat_messages = ["[{}]({})".format(m.text, get_message_link(username, m.message_id)) for m in messages
+                                if m.category == cat]
+                template = template.replace("$plantilla{}$".format(index), "\n".join(cat_messages))
+            index += 1
+    elif "$plantilla$" in template:
+        final_messages = ["[{}]({})".format(m.text, get_message_link(username, m.message_id)) for m in
+                          messages]
+        template = template.replace("$plantilla$", "\n".join(final_messages))
+    return template
+
+
+def get_message_link(chat_username, message_id):
+    """
+    Args:
+        chat_username (str)
+        message_id (int)
+
+    Returns:
+        str: Link of the message with id `message_id` in chat with
+            username `chat_username` in the format `t.me/chat/id`
+    """
+    return "t.me/{}/{}".format(get_no_at_username(chat_username), message_id)
+
+
+def get_at_username(username):
+    """
+
+    Args:
+        username (str)
+
+    Returns:
+        str: Returns username with @
+
+    """
+    if username[0] == "@":
+        return username
+    else:
+        return "@" + username
+
+
+def get_no_at_username(username):
+    """
+
+    Args:
+        username (str)
+
+    Returns:
+        str: Returns username without @
+
+    """
+    if username[0] == "@":
+        return username[1:]
+    else:
+        return username
+
+
+def get_reg_user(user, chat: Optional[telegram.Chat] = None):
+    """
+    Args:
+        chat
+        user (telegram.User)
+
+    Returns:
+        RegisteredUser: Finds or creates a new registered user
+    """
+    if user.id not in registered_users:
+        registered_users[user.id] = RegisteredUser(chat_id=chat.id)
+
+    return registered_users[user.id]
+
+
 def go_to_base(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user, update.message.chat)
+
     markup = ReplyKeyboardMarkup([
         [CUSTOMIZE_MARKUP],
-        [REGISTER_MARKUP, UNREGISTER_MARKUP]
+        [REGISTER_MARKUP, UNREGISTER_MARKUP],
+        [HELP_MARKUP]
     ], resize_keyboard=True, one_time_keyboard=True)
     update.message.reply_text(text="Menú 🤓\nPuedes usar /cancel en cualquier momento para volver aquí :D",
-                             reply_markup=markup)
-    context.chat_data[STATUS_ID] = "idle"
+                              reply_markup=markup)
+    reg_user.status = "idle"
 
-"""
-ask the user for the channel username (in the future will add inline buttons for the channels
-the user already registered or customized) 
-"""
+
 def request_customize_channel(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user, update.message.chat)
     markup = ReplyKeyboardMarkup(
-        [
-            [CANCEL_MARKUP]
-        ], resize_keyboard=True
+        reg_user.known_channels + [[CANCEL_MARKUP]], resize_keyboard=True
     )
     update.message.reply_text("¿Cuál es la @ del canal que desea configurar? 🧐",
                               reply_markup=markup)
-    context.chat_data[STATUS_ID] = "requested_customization"
+    reg_user.status = "requested_customization"
 
-"""if the user is administrator then present reply
-markups for the different settings
-change template
-change template picture"""
+
 def customize_channel(update, context):
-    username = update.message.text
-    if username in registered_channels and is_admin(bot.get_chat(username), update.message.from_user.id):
-        go_to_customization(update, context)
-        context.chat_data[CONTEXT_DATA_ID] = username
-    else:
-        update.message.reply_text("El canal " + username + " no está registrado o no eres administrador. 😗")
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user, update.message.chat)
+    username = get_at_username(update.message.text)
+    try:
+        if username in registered_channels and is_admin(bot.get_chat(username), update.message.from_user.id):
+            go_to_customization(update, context)
+            reg_user.context_data['channel'] = username
+        else:
+            update.message.reply_text("El canal " + username + " no está registrado o no eres administrador. 😗")
+            go_to_base(update, context)
+    except TelegramError:
+        update.message.reply_text("El canal " + username + " no se encontró")
         go_to_base(update, context)
 
+
 def go_to_customization(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user, update.message.chat)
     markup = ReplyKeyboardMarkup(
         [
             [SEND_NOW_MARKUP],
             [CHANGE_TEMPLATE_MARKUP, SEE_TEMPLATE_MARKUP],
             [CHANGE_TEMPLATE_PICTURE_MARKUP, SEE_TEMPLATE_PICTURE_MARKUP],
+            [CATEGORIES_MENU_MARKUP],
             [CHANGE_SUMMARY_TIME_MARKUP],
             [CANCEL_MARKUP]
         ], resize_keyboard=True
     )
     update.message.reply_text(text="¿Qué desea configurar? 🧐", reply_markup=markup)
-    context.chat_data[STATUS_ID] = "customizing"
+    reg_user.status = "customizing"
 
-def print_debug(update, context):
-    if admin_chat_id == update.message.chat.id:
-        for channel in registered_channels:
-            update.message.reply_text(str(channel))
 
-def request_change_template(update, context):
+def go_to_categories(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
+    markup = ReplyKeyboardMarkup(
+        [
+            [SEE_CATEGORIES_MARKUP],
+            [ADD_CATEGORY_MARKUP, REMOVE_CATEGORY_MARKUP],
+            [REORDER_CATEGORIES_MARKUP],
+            [CANCEL_MARKUP],
+        ], resize_keyboard=True
+    )
+    update.message.reply_text(text="Menú de categorías 🔢", reply_markup=markup)
+    reg_user.status = "categories"
+
+
+def get_categories_list_text(reg_channel, highlight: Optional[int] = -1):
+    """
+    Args:
+        reg_channel (RegisteredChannel)
+        highlight
+    Returns:
+        str: Formatted list of categories.
+    """
+    return "\n".join(["{}{}-{}{}".format(
+        ("", "*")[highlight == i],
+        i,
+        (reg_channel.categories[i], reg_channel.categories[i].replace("*", "\\*"))[highlight >= 0],
+        ("", "*")[highlight == i])
+        for i in range(len(reg_channel.categories))])
+
+
+def see_categories(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+    if len(reg_channel.categories) == 0:
+        update.message.reply_text("No hay ninguna categoría establecida para este canal")
+    else:
+        update.message.reply_text(get_categories_list_text(reg_channel))
+
+
+def request_add_category(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
     markup = ReplyKeyboardMarkup(
         [
             [CANCEL_MARKUP]
         ], resize_keyboard=True
     )
-    update.message.reply_text("Envíe la nueva plantilla, debe contener el texto \"$plantilla$\" que será donde se colocará el resumen 🤖",
+    update.message.reply_text("Cuál sera el identificador de la nueva categoría?", reply_markup=markup)
+    reg_user.status = "requested_add_category"
+
+
+def add_category(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+    reg_channel.categories.append(update.message.text)
+    update.message.reply_text(
+        "Categoría {} añadida! Para que esta funcione $plantilla{}$ debe estar en el texto de la plantilla"
+        .format(update.message.text, len(reg_channel.categories) - 1))
+    go_to_categories(update, context)
+
+
+def request_remove_category(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
+    markup = ReplyKeyboardMarkup(
+        [
+            [CANCEL_MARKUP]
+        ], resize_keyboard=True
+    )
+    update.message.reply_text("Cuál es el número de la categoría que desea eliminar?", reply_markup=markup)
+    reg_user.status = "requested_remove_category"
+
+
+def remove_category(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    try:
+        index = int(update.message.text)
+    except ValueError:
+        update.message.reply_text("Eso no es un número válido :c")
+        return
+
+    reg_user = get_reg_user(update.message.from_user)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+
+    if index < 0 or index >= len(reg_channel.categories):
+        update.message.reply_text("Eso no es un número válido :c")
+        return
+
+    reg_channel.categories.pop(index)
+    update.message.reply_text("Categoría eliminada.")
+    go_to_categories(update, context)
+
+
+def request_reorder_categories(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+    if len(reg_channel.categories) <= 1:
+        update.message.reply_text("Solo puede reordenar categorías luego de añadir 2 o mas categorías.")
+        go_to_categories(update, context)
+        return
+    markup = ReplyKeyboardMarkup(
+        [
+            [CANCEL_MARKUP]
+        ], resize_keyboard=True
+    )
+    update.message.reply_text("""Estas son las categorías que ha añadido:
+    {}
+    Cuál es el número de la categoría que desea mover?""".format(get_categories_list_text(reg_channel)),
                               reply_markup=markup)
-    context.chat_data[STATUS_ID] = "requested_template"
+    reg_user.status = "requested_reorder_categories"
+
+
+def reorder_categories(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    try:
+        index = int(update.message.text)
+    except ValueError:
+        update.message.reply_text("Eso no es un número válido :c")
+        return
+
+    reg_user = get_reg_user(update.message.from_user)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+
+    if index < 0 or index >= len(reg_channel.categories):
+        update.message.reply_text("Eso no es un número válido :c")
+        return
+
+    if index == 0:
+        markup = ReplyKeyboardMarkup(
+            [
+                [MOVE_DOWN_MARKUP],
+                [CANCEL_MARKUP]
+            ], resize_keyboard=True
+        )
+    elif index == len(reg_channel.categories) - 1:
+        markup = ReplyKeyboardMarkup(
+            [
+                [MOVE_UP_MARKUP],
+                [CANCEL_MARKUP]
+            ], resize_keyboard=True
+        )
+    else:
+        markup = ReplyKeyboardMarkup(
+            [
+                [MOVE_UP_MARKUP],
+                [MOVE_DOWN_MARKUP],
+                [CANCEL_MARKUP]
+            ], resize_keyboard=True
+        )
+    update.message.reply_text("""Utilice los botones para mover el elemento seleccionado:
+    {}
+    Presione {} para terminar""".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
+                              reply_markup=markup,
+                              parse_mode="MarkdownV2")
+    reg_user.status = "reordering_categories"
+    reg_user.context_data['index'] = index
+
+
+def move_category_up(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+
+    index = reg_user.context_data['index']
+    if index == 0:
+        markup = ReplyKeyboardMarkup(
+            [
+                [MOVE_DOWN_MARKUP],
+                [CANCEL_MARKUP]
+            ], resize_keyboard=True
+        )
+        update.message.reply_text("No se puede mover más arriba.")
+        update.message.reply_text("""Utilice los botones para mover el elemento seleccionado:
+        {}
+        Presione {} para terminar""".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
+                                  reply_markup=markup, parse_mode="MarkdownV2")
+    else:
+        index -= 1
+        item = reg_channel.categories[index]
+        reg_channel.categories.pop(index)
+        reg_channel.categories.insert(index + 1, item)
+        if index == 0:
+            markup = ReplyKeyboardMarkup(
+                [
+                    [MOVE_DOWN_MARKUP],
+                    [CANCEL_MARKUP]
+                ], resize_keyboard=True
+            )
+        else:
+            markup = ReplyKeyboardMarkup(
+                [
+                    [MOVE_UP_MARKUP],
+                    [MOVE_DOWN_MARKUP],
+                    [CANCEL_MARKUP]
+                ], resize_keyboard=True
+            )
+        update.message.reply_text("""Utilice los botones para mover el elemento seleccionado:
+        {}
+        Presione {} para terminar""".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
+                                  reply_markup=markup, parse_mode="MarkdownV2")
+        reg_user.context_data['index'] = index
+
+
+def move_category_down(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+
+    index = reg_user.context_data['index']
+    if index == len(reg_channel.categories) - 1:
+        markup = ReplyKeyboardMarkup(
+            [
+                [MOVE_UP_MARKUP],
+                [CANCEL_MARKUP]
+            ], resize_keyboard=True
+        )
+        update.message.reply_text("No se puede mover más abajo.")
+        update.message.reply_text("""Utilice los botones para mover el elemento seleccionado:
+        {}
+        Presione {} para terminar""".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
+                                  reply_markup=markup, parse_mode="MarkdownV2")
+    else:
+        index += 1
+        item = reg_channel.categories[index - 1]
+        reg_channel.categories.pop(index - 1)
+        reg_channel.categories.insert(index, item)
+        if index == len(reg_channel.categories) - 1:
+            markup = ReplyKeyboardMarkup(
+                [
+                    [MOVE_UP_MARKUP],
+                    [CANCEL_MARKUP]
+                ], resize_keyboard=True
+            )
+        else:
+            markup = ReplyKeyboardMarkup(
+                [
+                    [MOVE_UP_MARKUP],
+                    [MOVE_DOWN_MARKUP],
+                    [CANCEL_MARKUP]
+                ], resize_keyboard=True
+            )
+        update.message.reply_text("""Utilice los botones para mover el elemento seleccionado:
+        {}
+        Presione {} para terminar""".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
+                                  reply_markup=markup, parse_mode="MarkdownV2")
+        reg_user.context_data['index'] = index
+
+
+def request_change_template(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
+    markup = ReplyKeyboardMarkup(
+        [
+            [CANCEL_MARKUP]
+        ], resize_keyboard=True
+    )
+    update.message.reply_text(
+        "Envíe la nueva plantilla, debe contener el texto \"$plantilla$\" que será donde se colocará el resumen 🤖",
+        reply_markup=markup)
+    reg_user.status = "requested_template"
+
 
 def change_template(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
     if "$plantilla$" in update.message.text:
-        registered_channels[context.chat_data[CONTEXT_DATA_ID]].template = update.message.text
+        registered_channels[reg_user.context_data['channel']].template = update.message.text
         update.message.reply_text("Plantilla cambiada! :3")
         go_to_customization(update, context)
     else:
-        update.message.reply_text("Plantilla incompleta! Debe contener el texto $plantilla$ que sera sustituido por los contenidos de la plantilla. 😐")
+        update.message.reply_text(
+            "Plantilla incompleta! Debe contener el texto $plantilla$ que sera sustituido por los contenidos de la plantilla. 😐")
+
 
 def see_template(update, context):
-    update.message.reply_text(registered_channels[context.chat_data[CONTEXT_DATA_ID]].template)
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
+    update.message.reply_text(registered_channels[reg_user.context_data['channel']].template)
+
 
 def request_change_template_picture(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
     markup = ReplyKeyboardMarkup(
         [
             [CANCEL_MARKUP]
         ], resize_keyboard=True
     )
     update.message.reply_text("Envíe la nueva foto de plantilla. 📸", reply_markup=markup)
-    context.chat_data[STATUS_ID] = "requested_template_picture"
+    reg_user.status = "requested_template_picture"
+
 
 def change_template_picture(update, context):
-    registered_channels[context.chat_data[CONTEXT_DATA_ID]].template_picture = update.message.photo[-1].file_id
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
+    registered_channels[reg_user.context_data['channel']].template_picture = update.message.photo[-1].file_id
     update.message.reply_text("Foto establecida! :3")
     go_to_customization(update, context)
 
+
 def see_template_picture(update, context):
-    update.message.reply_photo(registered_channels[context.chat_data[CONTEXT_DATA_ID]].template_picture)
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
+    update.message.reply_photo(registered_channels[reg_user.context_data['channel']].template_picture)
+
 
 def request_change_summary_time(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
     markup = ReplyKeyboardMarkup(
         [
             [CANCEL_MARKUP]
         ], resize_keyboard=True
     )
-    update.message.reply_text("Diga cada cuántas horas debo enviar el resumen, sólo envíe el numero\nejemplo: \"12\"\nValor actual:{}".format(registered_channels[context.chat_data[CONTEXT_DATA_ID]].template_time_dif),
-                              reply_markup=markup)
-    context.chat_data[STATUS_ID] = "requested_summary_time"
+    update.message.reply_text(
+        "Diga cada cuántas horas debo enviar el resumen, sólo envíe el numero\nejemplo: \"12\"\nValor actual:{}"
+        .format(registered_channels[reg_user.context_data['channel']].template_time_dif),
+        reply_markup=markup)
+    reg_user.status = "requested_summary_time"
+
 
 def change_summary_time(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
     try:
         time = int(update.message.text)
         if time <= 0:
             update.message.reply_text("Eso no es un número válido :/")
         else:
-            registered_channels[context.chat_data[CONTEXT_DATA_ID]].template_time_dif = time
+            registered_channels[reg_user.context_data['channel']].template_time_dif = time
             update.message.reply_text("Tiempo entre resumenes cambiado :3")
     except ValueError:
         update.message.reply_text("Eso no es un número válido :/")
     finally:
         go_to_customization(update, context)
 
+
 def request_register_channel(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
     markup = ReplyKeyboardMarkup(
-        [
-            [CANCEL_MARKUP]
-        ], resize_keyboard=True
+        reg_user.known_channels + [CANCEL_MARKUP], resize_keyboard=True
     )
+
     update.message.reply_text("Diga la @ del canal que desea registrar :D",
                               reply_markup=markup)
-    context.chat_data[STATUS_ID] = "requested_register"
+    reg_user.status = "requested_register"
+
 
 def register_channel(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
     if update.message.text in registered_channels:
         update.message.reply_text("El canal {} ya se encuentra registrado".format(update.message.text))
         go_to_base(update, context)
@@ -217,7 +941,8 @@ def register_channel(update, context):
     try:
         channel = bot.get_chat(update.message.text)
     except TelegramError:
-        update.message.reply_text("No se encontró el canal :|, recuerda que debe estar en el formato \"@NombreDeCanal\"")
+        update.message.reply_text(
+            "No se encontró el canal :|, recuerda que debe estar en el formato \"@NombreDeCanal\"")
         return
     atusername = get_at_username(channel.username)
     if atusername in registered_channels:
@@ -225,14 +950,22 @@ def register_channel(update, context):
         go_to_base(update, context)
         return
     if is_admin(channel, update.message.from_user.id):
-        registered_channels[atusername] = RegisteredChannel(id=channel.id)
-        update.message.reply_text("Canal registrado! :D Ahora en el menú debes configurar la plantilla antes de que pueda ser usada 📄")
+        registered_channels[atusername] = RegisteredChannel(chat_id=channel.id)
+        add_to_known_channels(get_reg_user(update.message.from_user), atusername)
+        update.message.reply_text(
+            "Canal registrado! :D Ahora en el menú debes configurar la plantilla antes de que pueda ser usada 📄")
         go_to_base(update, context)
     else:
-        update.message.reply_text("No eres administrador de este canal D:")
         go_to_base(update, context)
 
+
 def request_unregister_channel(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
     markup = ReplyKeyboardMarkup(
         [
             [CANCEL_MARKUP]
@@ -240,43 +973,80 @@ def request_unregister_channel(update, context):
     )
     update.message.reply_text("Diga la @ del canal que desea sacar del registro :(",
                               reply_markup=markup)
-    context.chat_data[STATUS_ID] = "requested_unregister"
+    reg_user.status = "requested_unregister"
+
 
 def unregister_channel(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
     channel = update.message.text
     if channel in registered_channels:
         if is_admin(bot.get_chat(channel), update.message.from_user.id):
+            reg_user = get_reg_user(update.message.from_user)
             registered_channels.pop(channel)
-            update.message.reply_text("Canal eliminado del registro satisfactoriamente (satisfactorio para ti, pvto) ;-;")
+            if channel in reg_user.known_channels:
+                reg_user.known_channels.remove(channel)
+            update.message.reply_text(
+                "Canal eliminado del registro satisfactoriamente (satisfactorio para ti, pvto) ;-;")
+            go_to_base(update, context)
+        else:
             go_to_base(update, context)
     else:
-        update.message.reply_text("Este canal no está registrado, recuerda que debe estar en el formato \"@NombreDeCanal\"")
+        update.message.reply_text(
+            "Este canal no está registrado, recuerda que debe estar en el formato \"@NombreDeCanal\"")
+
 
 def send_summary_now(update, context):
-    post_summary(context.chat_data[CONTEXT_DATA_ID])
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.message.from_user)
+    post_summary(reg_user.context_data['channel'])
     update.message.reply_text("Resumen enviado :D")
 
-def is_admin(from_chat, user_id):
-    if from_chat.type == "channel":
-        member = from_chat.get_member(user_id)
-        if member is not None:
-            if member in from_chat.get_administrators():
-                return True
-            else:
-                update.message.reply_text("No eres administrador de ese canal :/ eres tonto o primo de JAVIER?")
-                return False
-        else:
-            update.message.reply_text("No perteneces a ese canal :/ eres tonto o primo de JAVIER?")
-            return False
-    else:
-        update.message.reply_text("Ese mensaje no viene de un canal :/ eres tonto o primo de JAVIER?")
-        return False
 
-def help(update, context):
-    """Send a message when the command /help is issued."""
+def is_admin(from_chat, user_id):
+    """
+    Args:
+        from_chat (telegram.Chat)
+        user_id (int)
+    """
+    if from_chat.type == "channel":
+        try:
+            member = from_chat.get_member(user_id)
+            if member is not None:
+                if member in from_chat.get_administrators():
+                    return True
+                else:
+                    return "No eres administrador de ese canal :/ eres tonto o primo de JAVIER?"
+            else:
+                return "No perteneces a ese canal :/ eres tonto o primo de JAVIER?"
+        except TelegramError:
+            return "No pude encontrar ese chat"
+    else:
+        return "Ese mensaje no viene de un canal :/ eres tonto o primo de JAVIER?"
+
+
+def help_handler(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
     update.message.reply_text('No implementado uwu (fokiu)')
 
+
 def backup(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
     if update.message.chat.id != admin_chat_id:
         return
     serialize_bot_data("bot_data.json")
@@ -284,7 +1054,13 @@ def backup(update, context):
     bot.send_document(chat_id=update.message.chat.id, document=file, filename="bot_data.json")
     file.close()
 
+
 def restore(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
     original = update.message.reply_to_message
     if original is not None and original.document is not None:
         t_file = original.document.get_file()
@@ -293,26 +1069,48 @@ def restore(update, context):
     else:
         update.message.reply_text("That command must be a reply to the backup file")
 
+
 def deserialize_bot_data(filename):
-    file = open(filename, "r")
-    dict = json.load(file, object_hook=as_registered_channel)
-    global admin_chat_id, registered_channels
-    admin_chat_id = dict['admin_id']
-    registered_channels = dict['registered_channels']
-    file.close()
+    """
+    Args:
+        filename (str)
+    """
+    try:
+        file = open(filename, "r")
+        dct = json.load(file, object_hook=decode_bot_data)
+        global admin_chat_id, registered_channels, registered_users
+        admin_chat_id = dct['admin_id']
+        registered_channels = dct['registered_channels']
+        registered_users = dct['registered_users']
+        file.close()
+    except OSError:
+        logger.warning("Could not load bot data.")
+
 
 def serialize_bot_data(filename):
+    """
+    Args:
+        filename (str)
+    """
     file = open(filename, "w")
     bot_data = {
-        'admin_id':admin_chat_id,
-        'registered_channels':registered_channels
+        'admin_id': admin_chat_id,
+        'registered_channels': registered_channels,
+        'registered_users': registered_users
     }
-    json.dump(bot_data, file, cls=RegisteredChannelEncoder)
+    json.dump(bot_data, file, cls=BotDataEncoder)
     file.close()
 
+
 def process_private_message(update, context):
-    if STATUS_ID in context.chat_data:
-        status = context.chat_data[STATUS_ID]
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    if update.message.from_user.id in registered_users:
+        reg_user = get_reg_user(update.message.from_user)
+        status = reg_user.status
         text = update.message.text
         if status == "idle":
             if text == CUSTOMIZE_MARKUP:
@@ -321,6 +1119,8 @@ def process_private_message(update, context):
                 request_register_channel(update, context)
             elif text == UNREGISTER_MARKUP:
                 request_unregister_channel(update, context)
+            elif text == HELP_MARKUP:
+                help_handler(update, context)
             else:
                 update.message.reply_text("Guat? No entendí :/ (recuerda que soy un bot y soy tonto X'''D")
         elif status == "requested_customization":
@@ -340,6 +1140,8 @@ def process_private_message(update, context):
                 see_template_picture(update, context)
             elif text == CHANGE_SUMMARY_TIME_MARKUP:
                 request_change_summary_time(update, context)
+            elif text == CATEGORIES_MENU_MARKUP:
+                go_to_categories(update, context)
             elif text == SEND_NOW_MARKUP:
                 send_summary_now(update, context)
             elif text == CANCEL_MARKUP:
@@ -347,6 +1149,24 @@ def process_private_message(update, context):
                 go_to_base(update, context)
             else:
                 update.message.reply_text("Guat? No entendí :/ (recuerda que soy un bot y soy tonto X'''D")
+        elif status == "categories":
+            if text == ADD_CATEGORY_MARKUP:
+                request_add_category(update, context)
+            elif text == REMOVE_CATEGORY_MARKUP:
+                request_remove_category(update, context)
+            elif text == SEE_CATEGORIES_MARKUP:
+                see_categories(update, context)
+            elif text == REORDER_CATEGORIES_MARKUP:
+                request_reorder_categories(update, context)
+            elif text == CANCEL_MARKUP:
+                go_to_customization(update, context)
+        elif status == "reordering_categories":
+            if text == MOVE_UP_MARKUP:
+                move_category_up(update, context)
+            elif text == MOVE_DOWN_MARKUP:
+                move_category_down(update, context)
+            elif text == CANCEL_MARKUP:
+                go_to_categories(update, context)
         elif status == "requested_template":
             if text == CANCEL_MARKUP:
                 update.message.reply_text("Cancelado")
@@ -375,103 +1195,92 @@ def process_private_message(update, context):
                 go_to_customization(update, context)
             else:
                 change_summary_time(update, context)
+        elif status == "requested_add_category":
+            if text == CANCEL_MARKUP:
+                go_to_categories(update, context)
+            else:
+                add_category(update, context)
+        elif status == "requested_remove_category":
+            if text == CANCEL_MARKUP:
+                go_to_categories(update, context)
+            else:
+                remove_category(update, context)
+        elif status == "requested_reorder_categories":
+            if text == CANCEL_MARKUP:
+                go_to_categories(update, context)
+            else:
+                reorder_categories(update, context)
+
 
 def process_private_photo(update, context):
-    if STATUS_ID in context.chat_data:
-        status = context.chat_data[STATUS_ID]
+    """
+
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+
+    """
+    if update.message.from_user.id in registered_users:
+        reg_user = get_reg_user(update.message.from_user)
+        status = reg_user.status
         if status == "requested_template_picture":
             change_template_picture(update, context)
         else:
             update.message.reply_text("Quejeso? Tus nudes? :0")
 
+
 def process_channel_photo(update, context):
+    """
+
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+
+    """
     chat = update.channel_post.chat
     atusername = get_at_username(chat.username)
     if atusername not in registered_channels:
         return
     reg_channel = registered_channels[atusername]
-    add_to_saved_messages(atusername, update.channel_post.message_id)
+    add_to_saved_messages(atusername, update.channel_post)
 
     if reg_channel.last_summary_message_id != -1:
-        add_to_last_summary_messages(atusername, update.channel_post.message_id)
+        add_to_last_summary_messages(atusername, update.channel_post)
         bot.edit_message_text(chat_id=chat.id,
                               message_id=reg_channel.last_summary_message_id,
                               text=get_template_string(atusername,
                                                        reg_channel.last_saved_messages))
     try_post_summary(atusername)
+
 
 def process_channel_message(update, context):
+    """
+
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+
+    """
     chat = update.channel_post.chat
     atusername = get_at_username(chat.username)
     if atusername not in registered_channels:
         return
     reg_channel = registered_channels[atusername]
-    add_to_saved_messages(atusername, update.channel_post.message_id)
+    add_to_saved_messages(atusername, update.channel_post)
 
     if reg_channel.last_summary_message_id != -1:
-        add_to_last_summary_messages(atusername, update.channel_post.message_id)
+        add_to_last_summary_messages(atusername, update.channel_post)
         bot.edit_message_text(chat_id=chat.id,
                               message_id=reg_channel.last_summary_message_id,
                               text=get_template_string(atusername,
                                                        reg_channel.last_saved_messages))
     try_post_summary(atusername)
 
-def try_post_summary(username):
-    atusername = get_at_username(username)
-    reg_channel = registered_channels[atusername]
-
-    delta = datetime.now() - reg_channel.last_summary_time
-    if delta / timedelta(hours=1) >= reg_channel.template_time_dif:
-        post_summary(atusername)
-
-def post_summary(channel_username):
-    atusername = get_at_username(channel_username)
-    reg_channel = registered_channels[atusername]
-    if len(reg_channel.saved_messages) == 0:
-        return
-
-    if reg_channel.template != "":
-        if reg_channel.template_picture is not None:
-            bot.send_photo(chat_id=reg_channel.chat_id, photo=reg_channel.template_picture)
-        summary_id =bot.send_message(chat_id=reg_channel.chat_id,
-            text=get_template_string(atusername, reg_channel.saved_messages)).message_id
-        bot.pin_chat_message(reg_channel.chat_id, summary_id)
-        registered_channels[atusername].last_summary_message_id = summary_id
-        registered_channels[atusername].last_saved_messages = reg_channel.saved_messages
-        registered_channels[atusername].saved_messages = []
-        registered_channels[atusername].last_summary_time = datetime.now()
-
-def add_to_saved_messages(username, message_id):
-    atusername = get_at_username(username)
-    registered_channels[atusername].saved_messages.append(message_id)
-
-def add_to_last_summary_messages(username, message_id):
-    atusername = get_at_username(username)
-    registered_channels[atusername].last_saved_messages.append(message_id)
-
-def get_template_string(username, messages_id):
-    return registered_channels[get_at_username(username)].template.replace(
-        "$plantilla$",
-        "\n".join([get_message_link(username, id) for id in messages_id]))
-
-def get_message_link(chat_username, message_id):
-    return "t.me/{}/{}".format(get_no_at_username(chat_username), message_id)
-
-def get_at_username(username):
-    if username[0] == "@":
-        return username
-    else:
-        return "@" + username
-
-def get_no_at_username(username):
-    if username[0] == "@":
-        return username[1:]
-    else:
-        return  username
 
 def error(update, context):
     """Log Errors caused by Updates."""
     logger.warning('Update "%s" caused error "%s"', update, context.error)
+
 
 def main():
     """Start the bot."""
@@ -486,7 +1295,7 @@ def main():
     # on different commands - answer in Telegram
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("cancel", go_to_base))
-    dp.add_handler(CommandHandler("help", help))
+    dp.add_handler(CommandHandler("help", help_handler))
     dp.add_handler(CommandHandler("debug", print_debug))
     dp.add_handler(CommandHandler("backup", backup))
     dp.add_handler(CommandHandler("restore", restore))
@@ -505,10 +1314,10 @@ def main():
                           url_path=TOKEN,
                           webhook_url='https://forcegameshelper.herokuapp.com/' + TOKEN)
 
-    # Run the bot until you press Ctrl-C or the process receives SIGINT,
-    # SIGTERM or SIGABRT. This should be used most of the time, since
-    # start_polling() is non-blocking and will stop the bot gracefully.
+    deserialize_bot_data("bot_data.json")
+
     updater.idle()
+
 
 if __name__ == '__main__':
     main()
