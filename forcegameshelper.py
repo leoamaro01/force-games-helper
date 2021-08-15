@@ -32,21 +32,36 @@ class BotDataEncoder(json.JSONEncoder):
                 'context_data': obj.context_data,
                 'known_channels': obj.known_channels
             }
+        elif isinstance(obj, SavedMessage):
+            return {
+                '__saved_message__': True,
+                'text': obj.text,
+                'id': obj.message_id,
+                'cat': obj.category
+            }
         return json.JSONEncoder.default(self, obj)
 
 
 def decode_bot_data(dct):
     if '__reg_channel__' in dct:
-        return RegisteredChannel(chat_id=dct['chat_id'], template=dct['template'],
+        return RegisteredChannel(chat_id=dct['chat_id'],
+                                 template=dct['template'],
                                  template_picture=dct['template_picture'],
-                                 template_time_dif=dct['template_time_dif'], saved_messages=dct['saved_messages'],
+                                 template_time_dif=dct['template_time_dif'],
+                                 saved_messages=dct['saved_messages'],
                                  last_saved_messages=dct['last_saved_messages'],
                                  last_summary_message_id=dct['last_summary_message_id'],
                                  categories=dct['categories'],
                                  last_summary_time=datetime.fromisoformat(dct['last_summary_time']))
     elif '__reg_user__' in dct:
-        return RegisteredUser(chat_id=dct['chat_id'], status=dct['status'],
-                              context_data=dct['context_data'], known_channels=dct['known_channels'])
+        return RegisteredUser(chat_id=dct['chat_id'],
+                              status=dct['status'],
+                              context_data=dct['context_data'],
+                              known_channels=dct['known_channels'])
+    elif '__saved_message__' in dct:
+        return SavedMessage(message_id=dct['id'],
+                            text=dct['text'],
+                            category=dct['cat'])
     return dct
 
 
@@ -279,7 +294,8 @@ def post_summary(channel_username):
         if reg_channel.template_picture is not None:
             bot.send_photo(chat_id=reg_channel.chat_id, photo=reg_channel.template_picture)
         summary_id = bot.send_message(chat_id=reg_channel.chat_id,
-                                      text=get_template_string(atusername, reg_channel.saved_messages)).message_id
+                                      text=get_template_string(atusername, reg_channel.saved_messages),
+                                      parse_mode='MarkdownV2').message_id
         bot.pin_chat_message(reg_channel.chat_id, summary_id)
         registered_channels[atusername].last_summary_message_id = summary_id
         registered_channels[atusername].last_saved_messages = reg_channel.saved_messages
@@ -354,15 +370,45 @@ def get_template_string(username, messages):
         index = 0
         for cat in reg_channel.categories:
             if "$plantilla{}$".format(index) in template:
-                cat_messages = ["[{}]({})".format(m.text, get_message_link(username, m.message_id)) for m in messages
+                cat_messages = ["[{}]({})".format(escape_for_telegram(m.text), get_message_link(username, m.message_id)) for m in messages
                                 if m.category == cat]
                 template = template.replace("$plantilla{}$".format(index), "\n".join(cat_messages))
             index += 1
     elif "$plantilla$" in template:
-        final_messages = ["[{}]({})".format(m.text, get_message_link(username, m.message_id)) for m in
+        final_messages = ["[{}]({})".format(escape_for_telegram(m.text), get_message_link(username, m.message_id)) for m in
                           messages]
         template = template.replace("$plantilla$", "\n".join(final_messages))
     return template
+
+
+def escape_for_telegram(text):
+    """
+    Args:
+        text (str)
+
+    Returns:
+        str: Escaped text
+    """
+    return text\
+        .replace('\\', '\\\\')\
+        .replace('[', '\\[')\
+        .replace(']', '\\]')\
+        .replace('(', '\\(')\
+        .replace(')', '\\)')\
+        .replace('`', '\\`')\
+        .replace('>', '\\>')\
+        .replace('#', '\\#')\
+        .replace('+', '\\+')\
+        .replace('-', '\\-')\
+        .replace('=', '\\=')\
+        .replace('|', '\\|')\
+        .replace('{', '\\{')\
+        .replace('}', '\\}')\
+        .replace('.', '\\.')\
+        .replace('!', '\\!')\
+        .replace('*', '\\*')\
+        .replace('_', '\\_')\
+        .replace('~', '\\~')
 
 
 def get_message_link(chat_username, message_id):
@@ -451,7 +497,7 @@ def request_customize_channel(update, context):
     """
     reg_user = get_reg_user(update.message.from_user, update.message.chat)
     markup = ReplyKeyboardMarkup(
-        reg_user.known_channels + [[CANCEL_MARKUP]], resize_keyboard=True
+        [[ch] for ch in reg_user.known_channels] + [[CANCEL_MARKUP]], resize_keyboard=True
     )
     update.message.reply_text("¿Cuál es la @ del canal que desea configurar? 🧐",
                               reply_markup=markup)
@@ -530,10 +576,10 @@ def get_categories_list_text(reg_channel, highlight: Optional[int] = -1):
     Returns:
         str: Formatted list of categories.
     """
-    return "\n".join(["{}{}-{}{}".format(
+    return "\n".join(["{}{}\\-{}{}".format(
         ("", "*")[highlight == i],
         i,
-        (reg_channel.categories[i], reg_channel.categories[i].replace("*", "\\*"))[highlight >= 0],
+        (escape_for_telegram(reg_channel.categories[i])),
         ("", "*")[highlight == i])
         for i in range(len(reg_channel.categories))])
 
@@ -640,10 +686,13 @@ def request_reorder_categories(update, context):
             [CANCEL_MARKUP]
         ], resize_keyboard=True
     )
-    update.message.reply_text("""Estas son las categorías que ha añadido:
-    {}
-    Cuál es el número de la categoría que desea mover?""".format(get_categories_list_text(reg_channel)),
-                              reply_markup=markup)
+    update.message.reply_text(
+        """
+        Estas son las categorías que ha añadido:
+        {}
+        "Cuál es el número de la categoría que desea mover?
+        """.format(get_categories_list_text(reg_channel)),
+        reply_markup=markup)
     reg_user.status = "requested_reorder_categories"
 
 
@@ -688,11 +737,14 @@ def reorder_categories(update, context):
                 [CANCEL_MARKUP]
             ], resize_keyboard=True
         )
-    update.message.reply_text("""Utilice los botones para mover el elemento seleccionado:
-    {}
-    Presione {} para terminar""".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
-                              reply_markup=markup,
-                              parse_mode="MarkdownV2")
+    update.message.reply_text(
+        """
+        Utilice los botones para mover el elemento seleccionado:
+        {}
+        Presione {} para terminar
+        """.format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
+        reply_markup=markup,
+        parse_mode="MarkdownV2")
     reg_user.status = "reordering_categories"
     reg_user.context_data['index'] = index
 
@@ -715,10 +767,6 @@ def move_category_up(update, context):
             ], resize_keyboard=True
         )
         update.message.reply_text("No se puede mover más arriba.")
-        update.message.reply_text("""Utilice los botones para mover el elemento seleccionado:
-        {}
-        Presione {} para terminar""".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
-                                  reply_markup=markup, parse_mode="MarkdownV2")
     else:
         index -= 1
         item = reg_channel.categories[index]
@@ -739,11 +787,15 @@ def move_category_up(update, context):
                     [CANCEL_MARKUP]
                 ], resize_keyboard=True
             )
-        update.message.reply_text("""Utilice los botones para mover el elemento seleccionado:
-        {}
-        Presione {} para terminar""".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
-                                  reply_markup=markup, parse_mode="MarkdownV2")
         reg_user.context_data['index'] = index
+    update.message.reply_text(
+        """
+        Utilice los botones para mover el elemento seleccionado:
+        {}
+        Presione {} para terminar
+        """.format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
+        reply_markup=markup,
+        parse_mode="MarkdownV2")
 
 
 def move_category_down(update, context):
@@ -764,10 +816,6 @@ def move_category_down(update, context):
             ], resize_keyboard=True
         )
         update.message.reply_text("No se puede mover más abajo.")
-        update.message.reply_text("""Utilice los botones para mover el elemento seleccionado:
-        {}
-        Presione {} para terminar""".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
-                                  reply_markup=markup, parse_mode="MarkdownV2")
     else:
         index += 1
         item = reg_channel.categories[index - 1]
@@ -788,11 +836,15 @@ def move_category_down(update, context):
                     [CANCEL_MARKUP]
                 ], resize_keyboard=True
             )
-        update.message.reply_text("""Utilice los botones para mover el elemento seleccionado:
-        {}
-        Presione {} para terminar""".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
-                                  reply_markup=markup, parse_mode="MarkdownV2")
         reg_user.context_data['index'] = index
+    update.message.reply_text(
+        """
+        Utilice los botones para mover el elemento seleccionado:
+        {}
+        Presione {} para terminar
+        """.format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
+        reply_markup=markup,
+        parse_mode="MarkdownV2")
 
 
 def request_change_template(update, context):
@@ -924,7 +976,7 @@ def request_register_channel(update, context):
     """
     reg_user = get_reg_user(update.message.from_user)
     markup = ReplyKeyboardMarkup(
-        reg_user.known_channels + [[CANCEL_MARKUP]], resize_keyboard=True
+        [[ch] for ch in reg_user.known_channels] + [[CANCEL_MARKUP]], resize_keyboard=True
     )
 
     update.message.reply_text("Diga la @ del canal que desea registrar :D",
@@ -1018,14 +1070,14 @@ def send_summary_now(update, context):
     update.message.reply_text("Resumen enviado :D")
 
 
-def is_admin(from_chat, user_id):
+def is_admin(from_chat, user_id) -> tuple[bool, str]:
     """
     Args:
         from_chat (telegram.Chat)
         user_id (int)
 
     Returns:
-        tuple[bool, str]: A tuple, Item 1 is True if user is admin and False otherwise,
+        A tuple, Item 1 is True if user is admin and False otherwise,
             in this case Item 2 is the reason
     """
     if from_chat.type == "channel":
@@ -1047,7 +1099,7 @@ def is_admin(from_chat, user_id):
             else:
                 return False, "No perteneces a ese canal"
         except TelegramError:
-            return False, "No pude encontrar ese chat, o no perteneces a este, o el bot no pertenece a este"
+            return False, "No perteneces a este canal, o el bot no pertenece a este"
     else:
         return False, "Ese chat no es un canal"
 
@@ -1058,7 +1110,7 @@ def help_handler(update, context):
         update (telegram.Update)
         context (telegram.ext.CallbackContext)
     """
-    update.message.reply_text(HELP_MARKUP)
+    update.message.reply_text(HELP_TEXT)
 
 
 def backup(update, context):
