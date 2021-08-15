@@ -467,11 +467,15 @@ def customize_channel(update, context):
     reg_user = get_reg_user(update.message.from_user, update.message.chat)
     username = get_at_username(update.message.text)
     try:
-        if username in registered_channels and is_admin(bot.get_chat(username), update.message.from_user.id):
-            go_to_customization(update, context)
-            reg_user.context_data['channel'] = username
+        if username in registered_channels:
+            admin_status = is_admin(bot.get_chat(username), update.message.from_user.id)
+            if admin_status[0]:
+                go_to_customization(update, context)
+                reg_user.context_data['channel'] = username
+            else:
+                update.message.reply_text(admin_status[1])
         else:
-            update.message.reply_text("El canal " + username + " no está registrado o no eres administrador. 😗")
+            update.message.reply_text("El canal " + username + " no está registrado 😗")
             go_to_base(update, context)
     except TelegramError:
         update.message.reply_text("El canal " + username + " no se encontró")
@@ -920,7 +924,7 @@ def request_register_channel(update, context):
     """
     reg_user = get_reg_user(update.message.from_user)
     markup = ReplyKeyboardMarkup(
-        reg_user.known_channels + [CANCEL_MARKUP], resize_keyboard=True
+        reg_user.known_channels + [[CANCEL_MARKUP]], resize_keyboard=True
     )
 
     update.message.reply_text("Diga la @ del canal que desea registrar :D",
@@ -934,28 +938,30 @@ def register_channel(update, context):
         update (telegram.Update)
         context (telegram.ext.CallbackContext)
     """
-    if update.message.text in registered_channels:
-        update.message.reply_text("El canal {} ya se encuentra registrado".format(update.message.text))
-        go_to_base(update, context)
-        return
-    try:
-        channel = bot.get_chat(update.message.text)
-    except TelegramError:
-        update.message.reply_text(
-            "No se encontró el canal :|, recuerda que debe estar en el formato \"@NombreDeCanal\"")
-        return
-    atusername = get_at_username(channel.username)
+    atusername = get_at_username(update.message.text)
     if atusername in registered_channels:
         update.message.reply_text("El canal {} ya se encuentra registrado".format(atusername))
         go_to_base(update, context)
         return
-    if is_admin(channel, update.message.from_user.id):
+    try:
+        channel = bot.get_chat(atusername)
+    except TelegramError:
+        update.message.reply_text(
+            "No se encontró el canal :|")
+        return
+    if atusername in registered_channels:
+        update.message.reply_text("El canal {} ya se encuentra registrado".format(atusername))
+        go_to_base(update, context)
+        return
+    admin_status = is_admin(channel, update.message.from_user.id)
+    if admin_status[0]:
         registered_channels[atusername] = RegisteredChannel(chat_id=channel.id)
         add_to_known_channels(get_reg_user(update.message.from_user), atusername)
         update.message.reply_text(
             "Canal registrado! :D Ahora en el menú debes configurar la plantilla antes de que pueda ser usada 📄")
         go_to_base(update, context)
     else:
+        update.message.reply_text(admin_status[1])
         go_to_base(update, context)
 
 
@@ -984,7 +990,8 @@ def unregister_channel(update, context):
     """
     channel = update.message.text
     if channel in registered_channels:
-        if is_admin(bot.get_chat(channel), update.message.from_user.id):
+        admin_status = is_admin(bot.get_chat(channel), update.message.from_user.id)
+        if admin_status[0]:
             reg_user = get_reg_user(update.message.from_user)
             registered_channels.pop(channel)
             if channel in reg_user.known_channels:
@@ -993,6 +1000,7 @@ def unregister_channel(update, context):
                 "Canal eliminado del registro satisfactoriamente (satisfactorio para ti, pvto) ;-;")
             go_to_base(update, context)
         else:
+            update.message.reply_text(admin_status[1])
             go_to_base(update, context)
     else:
         update.message.reply_text(
@@ -1015,21 +1023,33 @@ def is_admin(from_chat, user_id):
     Args:
         from_chat (telegram.Chat)
         user_id (int)
+
+    Returns:
+        tuple[bool, str]: A tuple, Item 1 is True if user is admin and False otherwise,
+            in this case Item 2 is the reason
     """
     if from_chat.type == "channel":
         try:
+            bot_user: telegram.User = bot.get_me()
+            bot_member = from_chat.get_member(bot_user.id)
+            administrators = from_chat.get_administrators()
+            if bot_member is not None:
+                if bot_member not in administrators:
+                    return False, "El bot no es administrador del canal"
+            else:
+                return False, "El bot no pertenece al canal"
             member = from_chat.get_member(user_id)
             if member is not None:
-                if member in from_chat.get_administrators():
-                    return True
+                if member in administrators:
+                    return True, ""
                 else:
-                    return "No eres administrador de ese canal :/ eres tonto o primo de JAVIER?"
+                    return False, "No eres administrador de ese canal :/ eres tonto o primo de JAVIER?"
             else:
-                return "No perteneces a ese canal :/ eres tonto o primo de JAVIER?"
+                return False, "No perteneces a ese canal"
         except TelegramError:
-            return "No pude encontrar ese chat"
+            return False, "No pude encontrar ese chat, o no perteneces a este, o el bot no pertenece a este"
     else:
-        return "Ese mensaje no viene de un canal :/ eres tonto o primo de JAVIER?"
+        return False, "Ese chat no es un canal"
 
 
 def help_handler(update, context):
@@ -1038,7 +1058,7 @@ def help_handler(update, context):
         update (telegram.Update)
         context (telegram.ext.CallbackContext)
     """
-    update.message.reply_text('No implementado uwu (fokiu)')
+    update.message.reply_text(HELP_MARKUP)
 
 
 def backup(update, context):
