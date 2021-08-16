@@ -1214,6 +1214,8 @@ def deserialize_bot_data(filename):
         dct = json.load(file, object_hook=decode_bot_data)
         global admin_chat_id, registered_channels, registered_users
         admin_chat_id = dct['admin_id']
+        registered_channels = {}
+        registered_users = {}
         registered_channels = dct['registered_channels']
         registered_users = dct['registered_users']
         file.close()
