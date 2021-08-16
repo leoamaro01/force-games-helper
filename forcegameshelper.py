@@ -535,7 +535,9 @@ def get_reg_user(user, chat):
     Returns:
         RegisteredUser: Finds or creates a new registered user
     """
+    logger.info(json.dumps(registered_users, cls=BotDataEncoder))
     if user.id not in registered_users:
+        logger.info("Adding user {}".format(user.id))
         registered_users[user.id] = RegisteredUser(chat_id=chat.id)
 
     return registered_users[user.id]
