@@ -169,6 +169,7 @@ REORDER_CATEGORIES_MARKUP = "⬆️ Reordenar Categorías ⬇️"
 MOVE_UP_MARKUP = "🔼 Mover Arriba 🔼"
 MOVE_DOWN_MARKUP = "🔽 Mover Abajo 🔽"
 HELP_MARKUP = "ℹ Cómo utilizar el Bot ℹ"
+FIND_PROBLEMS_MARKUP = "⚠ Buscar Problemas ⚠"
 HELP_TEXT = """Este bot te permitira publicar resumenes de todo lo publicado en tu canal de forma automática, para aprender a utilizarlo, sigue esta guía!
 
 Paso 1⃣: Registra tu canal.
@@ -216,6 +217,7 @@ registered_users: dict[str, RegisteredUser] = {}
 update_checker: list[datetime] = []
 
 # TODO automatic client deletion if last update was too long ago
+# TODO work around permissions when trying to write to a channel
 
 
 def start(update, context):
@@ -325,9 +327,24 @@ def post_summary(channel_username):
     Args:
         channel_username (str)
 
+    Returns:
+        bool: True if the message was succesfully posted, False otherwise
     """
     atusername = get_at_username(channel_username)
     reg_channel = registered_channels[atusername]
+
+    can_pin = True
+    bot_member = get_bot_chat_member(atusername)
+    if not bot_member.can_post_messages:
+        bot.send_message(chat_id=admin_chat_id,
+                         text="Send Message permission denied in {}".
+                         format(atusername))
+        return False
+    if not bot_member.can_pin_messages:
+        bot.send_message(chat_id=admin_chat_id,
+                         text="Pin message permission denied in {}".
+                         format(atusername))
+        can_pin = False
 
     if reg_channel.template != "":
         if reg_channel.template_picture is not None and reg_channel.template_picture != "":
@@ -335,13 +352,32 @@ def post_summary(channel_username):
         text = get_template_string(atusername, reg_channel.saved_messages)
         summary_id = bot.send_message(chat_id=reg_channel.chat_id,
                                       text=text,
-                                      parse_mode='MarkdownV2').message_id
-        bot.pin_chat_message(reg_channel.chat_id, summary_id)
+                                      parse_mode='MarkdownV2',
+                                      disable_web_page_preview=True).message_id
+        if can_pin:
+            bot.pin_chat_message(reg_channel.chat_id, summary_id)
         reg_channel.last_summary_message_text = text
         reg_channel.last_summary_message_id = summary_id
         reg_channel.last_saved_messages = reg_channel.saved_messages
         reg_channel.saved_messages = []
         reg_channel.last_summary_time = datetime.now()
+        return True
+    return False
+
+
+def get_bot_chat_member(chat_username):
+    """
+    Args:
+        chat_username (str)
+
+    Returns:
+        telegram.ChatMember: The bot's member in the target chat
+
+    """
+    atusername = get_at_username(chat_username)
+    chat: telegram.Chat = bot.get_chat(chat_username)
+    bot_user: telegram.User = bot.get_me()
+    return chat.get_member(bot_user.id)
 
 
 def add_to_last_summary(chat, message):
@@ -353,6 +389,14 @@ def add_to_last_summary(chat, message):
 
     """
     atusername = get_at_username(chat.username)
+
+    bot_member = get_bot_chat_member(atusername)
+    if not bot_member.can_post_messages:
+        bot.send_message(chat_id=admin_chat_id,
+                         text="Send Message permission denied in {}".
+                         format(atusername))
+        return
+
     reg_channel = registered_channels[atusername]
     if reg_channel.last_summary_message_id != -1:
         add_to_last_summary_messages(atusername, message)
@@ -361,6 +405,7 @@ def add_to_last_summary(chat, message):
             bot.edit_message_text(chat_id=chat.id,
                                   message_id=reg_channel.last_summary_message_id,
                                   text=text,
+                                  disable_web_page_preview=True,
                                   parse_mode='MarkdownV2')
             reg_channel.last_summary_message_text = text
 
@@ -535,10 +580,8 @@ def get_reg_user(user, chat):
     Returns:
         RegisteredUser: Finds or creates a new registered user
     """
-    logger.info(json.dumps(registered_users, cls=BotDataEncoder))
     str_id = str(user.id)
     if str_id not in registered_users:
-        logger.info("Adding user {}".format(str_id))
         registered_users[str_id] = RegisteredUser(chat_id=chat.id)
 
     return registered_users[str_id]
@@ -611,6 +654,7 @@ def go_to_customization(update, context):
     markup = ReplyKeyboardMarkup(
         [
             [SEND_NOW_MARKUP],
+            [FIND_PROBLEMS_MARKUP],
             [CHANGE_TEMPLATE_MARKUP, SEE_TEMPLATE_MARKUP],
             [CHANGE_TEMPLATE_PICTURE_MARKUP, SEE_TEMPLATE_PICTURE_MARKUP],
             [CATEGORIES_MENU_MARKUP],
@@ -658,6 +702,51 @@ def get_categories_list_text(reg_channel, highlight: Optional[int] = -1):
         for i in range(len(reg_channel.categories))])
 
 
+def find_problems(update, context):
+    """
+
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+
+    Returns:
+
+    """
+    reg_user = get_reg_user(update.effective_user, update.effective_chat)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+    cat_count = len(reg_channel.categories)
+
+    missing_template = False
+    missing_template_tags = []
+    missing_main_template_tag = False
+
+    if reg_channel.template == "":
+        missing_template = True
+    elif cat_count > 0:
+        for i in range(cat_count):
+            tag = "$plantilla{}$".format(i)
+            if tag not in reg_channel.template:
+                missing_template_tags.append(tag)
+    else:
+        if "$plantilla$" not in reg_channel.template:
+            missing_main_template_tag = True
+
+    problems_text = ""
+    if missing_template:
+        problems_text = "No has establecido una plantilla para este resumen y no podrá enviarse"
+    elif missing_main_template_tag:
+        problems_text = "A tu plantilla le falta el texto '$plantilla$' para que pueda funcionar correctamente"
+    elif len(missing_template_tags) > 0:
+        problems_text = "Tu resumen utiliza categorías, sin embargo no " \
+                        "se encontraron las siguientes etiquetas:\n\n{}\n\n" \
+                        "Recuerda que cuando usas categorías la etiqueta $plantilla$ no hace " \
+                        "nada".format("\n".join(missing_template_tags))
+    else:
+        problems_text = "Perfecto!\nNo pude encontrar ningún problema en tu resumen!\n" \
+                        "Si no está funcionando escríbele a @LeoAmaro01, el creador del bot"
+    update.message.reply_text(problems_text)
+
+
 def see_categories(update, context):
     """
     Args:
@@ -694,6 +783,9 @@ def add_category(update, context):
         update (telegram.Update)
         context (telegram.ext.CallbackContext)
     """
+    if update.message.text.strip(" \t") == "":
+        update.message.reply_text("El identificador de la categoría no puede estar vacio")
+        return
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
     reg_channel = registered_channels[reg_user.context_data['channel']]
     reg_channel.categories.append(update.message.text)
@@ -1271,6 +1363,8 @@ def process_private_message(update, context):
     elif status == "customizing":
         if text == CHANGE_TEMPLATE_MARKUP:
             request_change_template(update, context)
+        elif text == FIND_PROBLEMS_MARKUP:
+            find_problems(update, context)
         elif text == CHANGE_TEMPLATE_PICTURE_MARKUP:
             request_change_template_picture(update, context)
         elif text == SEE_TEMPLATE_MARKUP:
