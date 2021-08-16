@@ -536,11 +536,12 @@ def get_reg_user(user, chat):
         RegisteredUser: Finds or creates a new registered user
     """
     logger.info(json.dumps(registered_users, cls=BotDataEncoder))
-    if user.id not in registered_users:
-        logger.info("Adding user {}".format(user.id))
-        registered_users[user.id] = RegisteredUser(chat_id=chat.id)
+    str_id = str(user.id)
+    if str_id not in registered_users:
+        logger.info("Adding user {}".format(str_id))
+        registered_users[str_id] = RegisteredUser(chat_id=chat.id)
 
-    return registered_users[user.id]
+    return registered_users[str_id]
 
 
 def go_to_base(update, context):
@@ -1216,8 +1217,6 @@ def deserialize_bot_data(filename):
         dct = json.load(file, object_hook=decode_bot_data)
         global admin_chat_id, registered_channels, registered_users
         admin_chat_id = dct['admin_id']
-        registered_channels = {}
-        registered_users = {}
         registered_channels = dct['registered_channels']
         registered_users = dct['registered_users']
         file.close()
@@ -1249,108 +1248,109 @@ def process_private_message(update, context):
         context (telegram.ext.CallbackContext)
     """
     auto_restore()
-    if update.effective_user.id in registered_users:
-        reg_user = get_reg_user(update.effective_user, update.effective_chat)
-        status = reg_user.status
-        text = update.message.text
-        if status == "idle":
-            if text == CUSTOMIZE_MARKUP:
-                request_customize_channel(update, context)
-            elif text == REGISTER_MARKUP:
-                request_register_channel(update, context)
-            elif text == UNREGISTER_MARKUP:
-                request_unregister_channel(update, context)
-            elif text == HELP_MARKUP:
-                help_handler(update, context)
-            else:
-                update.message.reply_text("Guat? No entendí :/ (recuerda que soy un bot y soy tonto X'''D")
-        elif status == "requested_customization":
-            if text == CANCEL_MARKUP:
-                update.message.reply_text("Cancelado")
-                go_to_base(update, context)
-            else:
-                customize_channel(update, context)
-        elif status == "customizing":
-            if text == CHANGE_TEMPLATE_MARKUP:
-                request_change_template(update, context)
-            elif text == CHANGE_TEMPLATE_PICTURE_MARKUP:
-                request_change_template_picture(update, context)
-            elif text == SEE_TEMPLATE_MARKUP:
-                see_template(update, context)
-            elif text == SEE_TEMPLATE_PICTURE_MARKUP:
-                see_template_picture(update, context)
-            elif text == CHANGE_SUMMARY_TIME_MARKUP:
-                request_change_summary_time(update, context)
-            elif text == CATEGORIES_MENU_MARKUP:
-                go_to_categories(update, context)
-            elif text == SEND_NOW_MARKUP:
-                send_summary_now(update, context)
-            elif text == CANCEL_MARKUP:
-                update.message.reply_text("Cancelado")
-                go_to_base(update, context)
-            else:
-                update.message.reply_text("Guat? No entendí :/ (recuerda que soy un bot y soy tonto X'''D")
-        elif status == "categories":
-            if text == ADD_CATEGORY_MARKUP:
-                request_add_category(update, context)
-            elif text == REMOVE_CATEGORY_MARKUP:
-                request_remove_category(update, context)
-            elif text == SEE_CATEGORIES_MARKUP:
-                see_categories(update, context)
-            elif text == REORDER_CATEGORIES_MARKUP:
-                request_reorder_categories(update, context)
-            elif text == CANCEL_MARKUP:
-                go_to_customization(update, context)
-        elif status == "reordering_categories":
-            if text == MOVE_UP_MARKUP:
-                move_category_up(update, context)
-            elif text == MOVE_DOWN_MARKUP:
-                move_category_down(update, context)
-            elif text == CANCEL_MARKUP:
-                go_to_categories(update, context)
-        elif status == "requested_template":
-            if text == CANCEL_MARKUP:
-                update.message.reply_text("Cancelado")
-                go_to_customization(update, context)
-            else:
-                change_template(update, context)
-        elif status == "requested_template_picture":
-            if text == CANCEL_MARKUP:
-                update.message.reply_text("Cancelado")
-                go_to_customization(update, context)
-        elif status == "requested_register":
-            if text == CANCEL_MARKUP:
-                update.message.reply_text("Cancelado")
-                go_to_base(update, context)
-            else:
-                register_channel(update, context)
-        elif status == "requested_unregister":
-            if text == CANCEL_MARKUP:
-                update.message.reply_text("Cancelado")
-                go_to_base(update, context)
-            else:
-                unregister_channel(update, context)
-        elif status == "requested_summary_time":
-            if text == CANCEL_MARKUP:
-                update.message.reply_text("Cancelado")
-                go_to_customization(update, context)
-            else:
-                change_summary_time(update, context)
-        elif status == "requested_add_category":
-            if text == CANCEL_MARKUP:
-                go_to_categories(update, context)
-            else:
-                add_category(update, context)
-        elif status == "requested_remove_category":
-            if text == CANCEL_MARKUP:
-                go_to_categories(update, context)
-            else:
-                remove_category(update, context)
-        elif status == "requested_reorder_categories":
-            if text == CANCEL_MARKUP:
-                go_to_categories(update, context)
-            else:
-                reorder_categories(update, context)
+    reg_user = get_reg_user(update.effective_user, update.effective_chat)
+    status = reg_user.status
+    text = update.message.text
+    if status == "idle":
+        if text == CUSTOMIZE_MARKUP:
+            request_customize_channel(update, context)
+        elif text == REGISTER_MARKUP:
+            request_register_channel(update, context)
+        elif text == UNREGISTER_MARKUP:
+            request_unregister_channel(update, context)
+        elif text == HELP_MARKUP:
+            help_handler(update, context)
+        else:
+            update.message.reply_text("Guat? No entendí :/ (recuerda que soy un bot y soy tonto X'''D")
+    elif status == "requested_customization":
+        if text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
+            go_to_base(update, context)
+        else:
+            customize_channel(update, context)
+    elif status == "customizing":
+        if text == CHANGE_TEMPLATE_MARKUP:
+            request_change_template(update, context)
+        elif text == CHANGE_TEMPLATE_PICTURE_MARKUP:
+            request_change_template_picture(update, context)
+        elif text == SEE_TEMPLATE_MARKUP:
+            see_template(update, context)
+        elif text == SEE_TEMPLATE_PICTURE_MARKUP:
+            see_template_picture(update, context)
+        elif text == CHANGE_SUMMARY_TIME_MARKUP:
+            request_change_summary_time(update, context)
+        elif text == CATEGORIES_MENU_MARKUP:
+            go_to_categories(update, context)
+        elif text == SEND_NOW_MARKUP:
+            send_summary_now(update, context)
+        elif text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
+            go_to_base(update, context)
+        else:
+            update.message.reply_text("Guat? No entendí :/ (recuerda que soy un bot y soy tonto X'''D")
+    elif status == "categories":
+        if text == ADD_CATEGORY_MARKUP:
+            request_add_category(update, context)
+        elif text == REMOVE_CATEGORY_MARKUP:
+            request_remove_category(update, context)
+        elif text == SEE_CATEGORIES_MARKUP:
+            see_categories(update, context)
+        elif text == REORDER_CATEGORIES_MARKUP:
+            request_reorder_categories(update, context)
+        elif text == CANCEL_MARKUP:
+            go_to_customization(update, context)
+    elif status == "reordering_categories":
+        if text == MOVE_UP_MARKUP:
+            move_category_up(update, context)
+        elif text == MOVE_DOWN_MARKUP:
+            move_category_down(update, context)
+        elif text == CANCEL_MARKUP:
+            go_to_categories(update, context)
+    elif status == "requested_template":
+        if text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
+            go_to_customization(update, context)
+        else:
+            change_template(update, context)
+    elif status == "requested_template_picture":
+        if text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
+            go_to_customization(update, context)
+    elif status == "requested_register":
+        if text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
+            go_to_base(update, context)
+        else:
+            register_channel(update, context)
+    elif status == "requested_unregister":
+        if text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
+            go_to_base(update, context)
+        else:
+            unregister_channel(update, context)
+    elif status == "requested_summary_time":
+        if text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
+            go_to_customization(update, context)
+        else:
+            change_summary_time(update, context)
+    elif status == "requested_add_category":
+        if text == CANCEL_MARKUP:
+            go_to_categories(update, context)
+        else:
+            add_category(update, context)
+    elif status == "requested_remove_category":
+        if text == CANCEL_MARKUP:
+            go_to_categories(update, context)
+        else:
+            remove_category(update, context)
+    elif status == "requested_reorder_categories":
+        if text == CANCEL_MARKUP:
+            go_to_categories(update, context)
+        else:
+            reorder_categories(update, context)
+    elif status == "":
+        go_to_base(update, context)
     auto_backup()
 
 
@@ -1363,13 +1363,12 @@ def process_private_photo(update, context):
 
     """
     auto_restore()
-    if update.effective_user.id in registered_users:
-        reg_user = get_reg_user(update.effective_user, update.effective_chat)
-        status = reg_user.status
-        if status == "requested_template_picture":
-            change_template_picture(update, context)
-        else:
-            update.message.reply_text("Quejeso? Tus nudes? :0")
+    reg_user = get_reg_user(update.effective_user, update.effective_chat)
+    status = reg_user.status
+    if status == "requested_template_picture":
+        change_template_picture(update, context)
+    else:
+        update.message.reply_text("Quejeso? Tus nudes? :0")
     auto_backup()
 
 
