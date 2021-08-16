@@ -432,7 +432,7 @@ def get_template_string(username, messages):
         index = 0
         for cat in reg_channel.categories:
             if "$plantilla{}$".format(index) in template:
-                cat_messages = ["\\-[{}]({})".format(escape_for_telegram(m.text), get_message_link(username, m.message_id))
+                cat_messages = ["\\-[{}]({})".format(escape_for_telegram(m.text.replace(cat, "")), get_message_link(username, m.message_id))
                                 for m in messages
                                 if m.category == cat]
                 if len(cat_messages) > 0:
