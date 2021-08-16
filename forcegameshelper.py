@@ -80,7 +80,7 @@ class SavedMessage:
 
 
 class RegisteredChannel:
-    def __init__(self, chat_id=0, template="", template_picture="", template_time_dif=12, saved_messages=None,
+    def __init__(self, chat_id=0, template="", template_picture="", template_time_dif=24, saved_messages=None,
                  last_saved_messages=None, last_summary_message_id=-1, categories=None, last_summary_time=None,
                  last_summary_message_text=""):
         """
@@ -197,7 +197,7 @@ Ese es un ejemplo te plantilla perfectamente válido.
 
 (Opcional) Además puedes poner una foto que será enviada cada vez que se envíe el resumen al canal.
 
-Puedes cambiar cada cuántas horas se envían los resumenes en el menú de Cambiar Horario de Resumenes, puedes hacer que se envíen cada 12h (por defecto), o incluso cada 1h, como prefieras.
+Puedes cambiar cada cuántas horas se envían los resumenes en el menú de Cambiar Horario de Resumenes, puedes hacer que se envíen cada 24h (por defecto), o incluso cada 1h, como prefieras.
 
 Paso 3⃣: Categorías.
 En el menú de Categorías (dentro de la configuración) puedes personalizar las categorías de tu plantilla, esto lo puedes hacer si tu canal envía diferentes tipos de contenido. Si no añades ninguna categoría todo lo que subas al canal se colocará en donde pusiste el texto $plantilla$
@@ -1007,7 +1007,7 @@ def request_change_summary_time(update, context):
         ], resize_keyboard=True
     )
     update.message.reply_text(
-        "Diga cada cuántas horas debo enviar el resumen, sólo envíe el numero\nejemplo: \"12\"\nValor actual:{}"
+        "Diga cada cuántas horas debo enviar el resumen, sólo envíe el numero\nejemplo: \"24\"\nValor actual:{}"
         .format(registered_channels[reg_user.context_data['channel']].template_time_dif),
         reply_markup=markup)
     reg_user.status = "requested_summary_time"
