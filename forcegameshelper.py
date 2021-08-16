@@ -333,11 +333,12 @@ def post_summary(channel_username):
     if reg_channel.template != "":
         if reg_channel.template_picture is not None and reg_channel.template_picture != "":
             bot.send_photo(chat_id=reg_channel.chat_id, photo=reg_channel.template_picture)
-        reg_channel.last_summary_message_text = get_template_string(atusername, reg_channel.saved_messages)
+        text = get_template_string(atusername, reg_channel.saved_messages)
         summary_id = bot.send_message(chat_id=reg_channel.chat_id,
-                                      text=reg_channel.last_summary_message_text,
+                                      text=text,
                                       parse_mode='MarkdownV2').message_id
         bot.pin_chat_message(reg_channel.chat_id, summary_id)
+        reg_channel.last_summary_message_text = text
         reg_channel.last_summary_message_id = summary_id
         reg_channel.last_saved_messages = reg_channel.saved_messages
         reg_channel.saved_messages = []
@@ -360,7 +361,8 @@ def add_to_last_summary(chat, message):
         if text != reg_channel.last_summary_message_text:
             bot.edit_message_text(chat_id=chat.id,
                                   message_id=reg_channel.last_summary_message_id,
-                                  text=text)
+                                  text=text,
+                                  parse_mode='MarkdownV2')
             reg_channel.last_summary_message_text = text
 
 
@@ -426,7 +428,7 @@ def get_template_string(username, messages):
     """
     atusername = get_at_username(username)
     reg_channel = registered_channels[atusername]
-    template = reg_channel.template
+    template = escape_for_telegram(reg_channel.template)
     if len(reg_channel.categories) > 0:
         index = 0
         for cat in reg_channel.categories:
