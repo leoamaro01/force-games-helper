@@ -276,12 +276,11 @@ def get_chat_id(update, context):
         context (telegram.ext.CallbackContext)
     """
     if update.effective_user.id == admin_chat_id:
-        if update.message.reply_to_message is not None:
-            if len(context.args) > 0:
-                try:
-                    update.message.reply_text(str(bot.get_chat(context.args[0])))
-                except TelegramError:
-                    update.message.reply_text("Chat no encontrado.")
+        if len(context.args) > 0:
+            try:
+                update.message.reply_text(str(bot.get_chat(context.args[0]).id))
+            except TelegramError:
+                update.message.reply_text("Chat no encontrado.")
 
 
 def stats(update, context):
@@ -304,6 +303,7 @@ def stats(update, context):
 def auto_backup():
     if bot_cloud is not None:
         logger.info("Performing timed Bot Data Backup")
+        serialize_bot_data("bot_data.json")
         file = open("bot_data.json", "rb")
         result = bot_cloud.send_document(document=file, filename="bot_data.json")
         bot_cloud.pin_message(result.message_id)
