@@ -1,12 +1,12 @@
 import logging
 import json
+import telegram
+import os
+from threading import Timer
 from datetime import datetime, timedelta
 from typing import Optional
-
-import telegram
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from telegram import ReplyKeyboardMarkup, Bot, TelegramError
-import os
 
 
 class BotDataEncoder(json.JSONEncoder):
@@ -141,6 +141,7 @@ class RegisteredUser:
 
 
 PORT = int(os.environ.get('PORT', 8443))
+BOT_CLOUD = os.environ.get('BOT_CLOUD')
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -214,10 +215,12 @@ admin_chat_id = -1
 registered_channels: dict[str, RegisteredChannel] = {}
 registered_users: dict[str, RegisteredUser] = {}
 
-update_checker: list[datetime] = []
+bot_cloud: telegram.Chat
 
-# TODO automatic client deletion if last update was too long ago
-# TODO work around permissions when trying to write to a channel
+update_checker: list[datetime] = []
+update_timer: Timer
+
+# TODO automatic client deletion if last update was too long
 
 
 def start(update, context):
@@ -263,6 +266,21 @@ def broadcast(update, context):
                                  message_id=update.message.reply_to_message.message_id)
 
 
+def get_chat_id(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    if update.effective_user.id == admin_chat_id:
+        if update.message.reply_to_message is not None:
+            if len(context.args) > 0:
+                try:
+                    update.message.reply_text(str(bot.get_chat(context.args[0])))
+                except TelegramError:
+                    update.message.reply_text("Chat no encontrado.")
+
+
 def stats(update, context):
     """
     Args:
@@ -281,18 +299,32 @@ def stats(update, context):
 
 
 def auto_backup():
-    if len(update_checker) != 0:
-        delta = datetime.now() - update_checker[0]
-        if delta / timedelta(minutes=1) > BACKUP_TIME_DIF:
-            logger.info("Performing timed Bot Data Backup")
-            serialize_bot_data("bot_data.json")
-            update_checker[0] = datetime.now()
+    delta = datetime.now() - update_checker[0]
+    if bot_cloud is not None:
+        logger.info("Performing timed Bot Data Backup")
+        file = open("bot_data.json", "rb")
+        result = bot_cloud.send_document(document=file, filename="bot_data.json")
+        bot_cloud.pin_message(result.message_id)
+        file.close()
+        update_checker[0] = datetime.now()
+        global update_timer
+        if update_timer is not None:
+            try:
+                update_timer.cancel()
+            except RuntimeError:
+                logger.error("Couldn't cancel timer")
+            finally:
+                update_timer.start()
+        else:
+            update_timer = Timer(BACKUP_TIME_DIF * 60, auto_backup)
+            update_timer.start()
 
 
 def auto_restore():
-    if len(update_checker) == 0:
+    if len(update_checker) == 0 and bot_cloud is not None and bot_cloud.pinned_message is not None:
+        t_file = bot_cloud.pinned_message.document.get_file()
         update_checker.append(datetime.now())
-        deserialize_bot_data("bot_data.json")
+        deserialize_bot_data(t_file.download())
 
 
 def add_to_known_channels(reg_user, channel):
@@ -1278,7 +1310,7 @@ def backup(update, context):
     """
     if update.effective_chat.id != admin_chat_id:
         return
-    serialize_bot_data("bot_data.json")
+    auto_backup()
     file = open("bot_data.json", "rb")
     bot.send_document(chat_id=update.effective_chat.id, document=file, filename="bot_data.json")
     file.close()
@@ -1295,6 +1327,7 @@ def restore(update, context):
         t_file = original.document.get_file()
         deserialize_bot_data(t_file.download())
         update.message.reply_text("Restored previous data!")
+        update_checker[0] = datetime.now()
     else:
         update.message.reply_text("That command must be a reply to the backup file")
 
@@ -1445,7 +1478,6 @@ def process_private_message(update, context):
             reorder_categories(update, context)
     elif status == "":
         go_to_base(update, context)
-    auto_backup()
 
 
 def process_private_photo(update, context):
@@ -1463,7 +1495,6 @@ def process_private_photo(update, context):
         change_template_picture(update, context)
     else:
         update.message.reply_text("Quejeso? Tus nudes? :0")
-    auto_backup()
 
 
 def process_channel_update(update, context):
@@ -1478,14 +1509,12 @@ def process_channel_update(update, context):
     chat = update.effective_chat
     atusername = get_at_username(chat.username)
     if atusername not in registered_channels:
-        auto_backup()
         return
     reg_channel = registered_channels[atusername]
     add_to_saved_messages(atusername, update.channel_post)
     add_to_last_summary(chat, update.channel_post)
 
     try_post_summary(atusername)
-    auto_backup()
 
 
 def error(update, context):
@@ -1511,6 +1540,7 @@ def main():
     dp.add_handler(CommandHandler("backup", backup))
     dp.add_handler(CommandHandler("restore", restore))
     dp.add_handler(CommandHandler("broadcast", broadcast))
+    dp.add_handler(CommandHandler("getchatid", get_chat_id))
     dp.add_handler(CommandHandler("stats", stats))
 
     dp.add_handler(MessageHandler(Filters.text & Filters.chat_type.private, process_private_message))
@@ -1518,6 +1548,14 @@ def main():
 
     dp.add_handler(MessageHandler(Filters.chat_type.channel & (Filters.text | Filters.caption),
                                   process_channel_update))
+
+    if BOT_CLOUD is not None and BOT_CLOUD != "":
+        global bot_cloud
+        bot_cloud = bot.get_chat(BOT_CLOUD)
+
+    auto_restore()
+    auto_backup()
+
     # log all errors
     dp.add_error_handler(error)
 
