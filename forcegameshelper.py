@@ -315,6 +315,7 @@ def auto_backup():
         except RuntimeError:
             logger.error("Couldn't cancel timer")
         finally:
+            update_timer = Timer(BACKUP_TIME_DIF * 60, auto_backup)
             update_timer.start()
 
 
