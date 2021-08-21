@@ -301,6 +301,7 @@ def stats(update, context):
 
 
 def auto_backup():
+    logger.info("Trying to auto-backup")
     if bot_cloud is not None:
         logger.info("Performing timed Bot Data Backup")
         serialize_bot_data("bot_data.json")
@@ -322,6 +323,7 @@ update_timer = Timer(BACKUP_TIME_DIF * 60, auto_backup)
 
 def auto_restore():
     if len(update_checker) == 0 and bot_cloud is not None and bot_cloud.pinned_message is not None:
+        logger.info("Performing data restore.")
         t_file = bot_cloud.pinned_message.document.get_file()
         update_checker.append(datetime.now())
         deserialize_bot_data(t_file.download())
@@ -365,18 +367,12 @@ def post_summary(channel_username):
     atusername = get_at_username(channel_username)
     reg_channel = registered_channels[atusername]
 
-    can_pin = True
     bot_member = get_bot_chat_member(atusername)
     if not bot_member.can_post_messages:
         bot.send_message(chat_id=admin_chat_id,
                          text="Send Message permission denied in {}".
                          format(atusername))
         return False
-    if not bot_member.can_pin_messages:
-        bot.send_message(chat_id=admin_chat_id,
-                         text="Pin message permission denied in {}".
-                         format(atusername))
-        can_pin = False
 
     if reg_channel.template != "":
         if reg_channel.template_picture is not None and reg_channel.template_picture != "":
@@ -386,8 +382,7 @@ def post_summary(channel_username):
                                       text=text,
                                       parse_mode='MarkdownV2',
                                       disable_web_page_preview=True).message_id
-        if can_pin:
-            bot.pin_chat_message(reg_channel.chat_id, summary_id)
+        bot.pin_chat_message(reg_channel.chat_id, summary_id)
         reg_channel.last_summary_message_text = text
         reg_channel.last_summary_message_id = summary_id
         reg_channel.last_saved_messages = reg_channel.saved_messages
@@ -453,10 +448,19 @@ def add_to_saved_messages(username, message):
     atusername = get_at_username(username)
     reg_channel = registered_channels[atusername]
 
+    text = ""
+
     if message.caption is None:
-        text = message.text.splitlines()[0]
+        for line in message.text.splitlines(False):
+            if line.strip(" \t") != "":
+                text = line
     else:
-        text = message.caption.splitlines()[0]
+        for line in message.caption.splitlines(False):
+            if line.strip(" \t") != "":
+                text = line
+
+    if text == "":
+        return
 
     if len(reg_channel.categories) > 0:
         for cat in reg_channel.categories:
@@ -509,7 +513,7 @@ def get_template_string(username, messages):
         index = 0
         for cat in reg_channel.categories:
             if "$plantilla{}$".format(index) in template:
-                cat_messages = ["\\-[{}]({})".format(escape_for_telegram(m.text.replace(cat, "")), get_message_link(username, m.message_id))
+                cat_messages = ["\\-[{}]({})".format(escape_for_telegram(m.text.replace(cat, "").strip()), get_message_link(username, m.message_id))
                                 for m in messages
                                 if m.category == cat]
                 if len(cat_messages) > 0:
