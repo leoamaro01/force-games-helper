@@ -215,10 +215,11 @@ admin_chat_id = -1
 registered_channels: dict[str, RegisteredChannel] = {}
 registered_users: dict[str, RegisteredUser] = {}
 
-bot_cloud: telegram.Chat
+if BOT_CLOUD is not None and BOT_CLOUD != "":
+    bot_cloud = bot.get_chat(BOT_CLOUD)
 
 update_checker: list[datetime] = []
-update_timer: Timer
+
 
 # TODO automatic client deletion if last update was too long
 
@@ -300,7 +301,7 @@ def stats(update, context):
 
 def auto_backup():
     delta = datetime.now() - update_checker[0]
-    if bot_cloud is not None:
+    if BOT_CLOUD is not "":
         logger.info("Performing timed Bot Data Backup")
         file = open("bot_data.json", "rb")
         result = bot_cloud.send_document(document=file, filename="bot_data.json")
@@ -308,20 +309,19 @@ def auto_backup():
         file.close()
         update_checker[0] = datetime.now()
         global update_timer
-        if update_timer is not None:
-            try:
-                update_timer.cancel()
-            except RuntimeError:
-                logger.error("Couldn't cancel timer")
-            finally:
-                update_timer.start()
-        else:
-            update_timer = Timer(BACKUP_TIME_DIF * 60, auto_backup)
+        try:
+            update_timer.cancel()
+        except RuntimeError:
+            logger.error("Couldn't cancel timer")
+        finally:
             update_timer.start()
 
 
+update_timer = Timer(BACKUP_TIME_DIF * 60, auto_backup)
+
+
 def auto_restore():
-    if len(update_checker) == 0 and bot_cloud is not None and bot_cloud.pinned_message is not None:
+    if len(update_checker) == 0 and BOT_CLOUD != "" and bot_cloud.pinned_message is not None:
         t_file = bot_cloud.pinned_message.document.get_file()
         update_checker.append(datetime.now())
         deserialize_bot_data(t_file.download())
@@ -1548,10 +1548,6 @@ def main():
 
     dp.add_handler(MessageHandler(Filters.chat_type.channel & (Filters.text | Filters.caption),
                                   process_channel_update))
-
-    if BOT_CLOUD is not None and BOT_CLOUD != "":
-        global bot_cloud
-        bot_cloud = bot.get_chat(BOT_CLOUD)
 
     auto_restore()
     auto_backup()
