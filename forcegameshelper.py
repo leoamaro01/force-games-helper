@@ -217,6 +217,8 @@ registered_users: dict[str, RegisteredUser] = {}
 
 if BOT_CLOUD is not None and BOT_CLOUD != "":
     bot_cloud = bot.get_chat(BOT_CLOUD)
+else:
+    bot_cloud = None
 
 update_checker: list[datetime] = []
 
@@ -301,7 +303,7 @@ def stats(update, context):
 
 def auto_backup():
     delta = datetime.now() - update_checker[0]
-    if BOT_CLOUD is not "":
+    if bot_cloud is not None:
         logger.info("Performing timed Bot Data Backup")
         file = open("bot_data.json", "rb")
         result = bot_cloud.send_document(document=file, filename="bot_data.json")
@@ -321,7 +323,7 @@ update_timer = Timer(BACKUP_TIME_DIF * 60, auto_backup)
 
 
 def auto_restore():
-    if len(update_checker) == 0 and BOT_CLOUD != "" and bot_cloud.pinned_message is not None:
+    if len(update_checker) == 0 and bot_cloud is not None and bot_cloud.pinned_message is not None:
         t_file = bot_cloud.pinned_message.document.get_file()
         update_checker.append(datetime.now())
         deserialize_bot_data(t_file.download())
