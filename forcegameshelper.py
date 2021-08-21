@@ -302,14 +302,12 @@ def stats(update, context):
 
 
 def auto_backup():
-    delta = datetime.now() - update_checker[0]
     if bot_cloud is not None:
         logger.info("Performing timed Bot Data Backup")
         file = open("bot_data.json", "rb")
         result = bot_cloud.send_document(document=file, filename="bot_data.json")
         bot_cloud.pin_message(result.message_id)
         file.close()
-        update_checker[0] = datetime.now()
         global update_timer
         try:
             update_timer.cancel()
