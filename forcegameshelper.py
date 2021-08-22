@@ -23,7 +23,9 @@ class BotDataEncoder(json.JSONEncoder):
                 'last_summary_message_id': obj.last_summary_message_id,
                 'last_summary_message_text': obj.last_summary_message_text,
                 'categories': obj.categories,
-                'last_summary_time': obj.last_summary_time.isoformat()
+                'last_summary_time': obj.last_summary_time.isoformat(),
+                'template_format': obj.template_format,
+                'parts_identifier': obj.parts_identifier
             }
         elif isinstance(obj, RegisteredUser):
             return {
@@ -38,7 +40,8 @@ class BotDataEncoder(json.JSONEncoder):
                 '__saved_message__': True,
                 'text': obj.text,
                 'id': obj.message_id,
-                'cat': obj.category
+                'cat': obj.category,
+                'parts': obj.parts
             }
         return json.JSONEncoder.default(self, obj)
 
@@ -54,7 +57,9 @@ def decode_bot_data(dct):
                                  last_summary_message_id=dct['last_summary_message_id'],
                                  categories=dct['categories'],
                                  last_summary_time=datetime.fromisoformat(dct['last_summary_time']),
-                                 last_summary_message_text=dct['last_summary_message_text'])
+                                 last_summary_message_text=dct['last_summary_message_text'],
+                                 template_format=dct['template_format'],
+                                 parts_identifier=dct['parts_identifier'])
     elif '__reg_user__' in dct:
         return RegisteredUser(chat_id=dct['chat_id'],
                               status=dct['status'],
@@ -63,12 +68,13 @@ def decode_bot_data(dct):
     elif '__saved_message__' in dct:
         return SavedMessage(message_id=dct['id'],
                             text=dct['text'],
-                            category=dct['cat'])
+                            category=dct['cat'],
+                            parts=dct['parts'])
     return dct
 
 
 class SavedMessage:
-    def __init__(self, message_id, text, category: Optional[str] = ""):
+    def __init__(self, message_id, text, category: Optional[str] = "", parts: Optional[str] = ""):
         """
         Args:
             message_id (int)
@@ -77,12 +83,13 @@ class SavedMessage:
         self.message_id = message_id
         self.text = text
         self.category = category
+        self.parts = parts
 
 
 class RegisteredChannel:
     def __init__(self, chat_id=0, template="", template_picture="", template_time_dif=24, saved_messages=None,
                  last_saved_messages=None, last_summary_message_id=-1, categories=None, last_summary_time=None,
-                 last_summary_message_text=""):
+                 last_summary_message_text="", template_format="", parts_identifier=""):
         """
         Args:
             chat_id (int)
@@ -101,6 +108,8 @@ class RegisteredChannel:
         self.template_time_dif = template_time_dif
         self.last_summary_message_id = last_summary_message_id
         self.last_summary_message_text = last_summary_message_text
+        self.template_format = template_format
+        self.parts_identifier = parts_identifier
         if saved_messages is not None:
             self.saved_messages = saved_messages
         else:
@@ -152,6 +161,7 @@ logger = logging.getLogger(__name__)
 TOKEN = os.environ.get('TOKEN', '')
 bot = Bot(token=TOKEN)
 
+
 CANCEL_MARKUP = "🔙 Atrás 🔙"
 REGISTER_MARKUP = "➕ Registrar Canal ➕"
 UNREGISTER_MARKUP = "✖️ Cancelar Registro de Canal ✖️"
@@ -169,18 +179,42 @@ REMOVE_CATEGORY_MARKUP = "✖️ Eliminar Categoría ✖️"
 REORDER_CATEGORIES_MARKUP = "⬆️ Reordenar Categorías ⬇️"
 MOVE_UP_MARKUP = "🔼 Mover Arriba 🔼"
 MOVE_DOWN_MARKUP = "🔽 Mover Abajo 🔽"
-HELP_MARKUP = "ℹ Cómo utilizar el Bot ℹ"
+HELP_MARKUP = "ℹ Ayuda ℹ"
 FIND_PROBLEMS_MARKUP = "⚠ Buscar Problemas ⚠"
-HELP_TEXT = """Este bot te permitira publicar resumenes de todo lo publicado en tu canal de forma automática, para aprender a utilizarlo, sigue esta guía!
+CHANGE_PARTS_ID_MARKUP = "📚 Cambiar Identificador de Partes 📚"
+DELETE_PARTS_ID_MARKUP = "🗑 Eliminar Identificador de Partes 🗑"
+DELETE_TEMPLATE_FORMAT_MARKUP = "🗑 Eliminar Formato de Plantilla 🗑"
+DELETE_TEMPLATE_PICTURE_MARKUP = "❌ Eliminar Foto de Plantilla ❌"
+CHANGE_TEMPLATE_FORMAT_MARKUP = "📑 Cambiar Formato de la Plantilla 📑"  # Markups
 
-Paso 1⃣: Registra tu canal.
-En el menu principal del bot tendrás un boton que titulado Registrar Canal, ahi debes dar la @ de tu canal, por ejemplo @Force_GamesS3. Para poder registrar un canal debes ser administrador del canal y el bot debe pertenecer al canal.
+REGISTER_HELP = "➕ Registrar Canal:\n"\
+                "Este es un paso obligatorio para que el bot funcione en tu canal, " \
+                "registra tu canal en el sistema (debes ser admin de este, " \
+                "al igual que el bot) y te permitirá configurarlo."
+UNREGISTER_HELP = "➖ Cancelar Registro de Canal:\n" \
+                  "En el caso de que no quieras seguir usando el bot en tu canal, " \
+                  "deberías cancelar su registro, esto se hará automáticamente si " \
+                  "eliminas al bot del canal y dejas que pase un tiempo, un canal " \
+                  "eliminado del registro perdera todas sus configuraciones."
+CUSTOMIZE_HELP = "⚙ Configurar Canal:\n" \
+                 "Entrar aquí tambien es obligatorio para que funcione correctamente " \
+                 "el bot y es donde pasarás la mayor parte del tiempo. [Más ayuda dentro]"
 
-Paso 2⃣: Configura el resumen.
-Este paso es obligatorio para que el bot funcione en tu canal. En el menu principal le dan al boton de Configurar Canal Registrado, y una vez adentro al boton de Cambiar Plantilla.
-
-Como debe ser la plantilla:
-La plantilla debe contener uno o varios (si usas categorías) lugares determinados por el usuario que será donde se colocarán los contenidos del resumen, estos lugares se identificaran por el texto $plantilla$ (o $plantilla0$, $plantilla1$, $plantilla2$, etc si usas categorias), por ejemplo:
+SEND_NOW_HELP = "✅ Enviar resumen ahora:\n" \
+                "Si tienes un resumen válido " \
+                "este será enviado inmediatamente al canal, se recomienda " \
+                "hacer esto apenas termines de configurar el bot, ya que de " \
+                "todas formas se actualiza automaticamente con todos los mensajes " \
+                "que lleguen al canal. Enviar el resumen inmediatamente hará que " \
+                "se reinicie el tiempo para enviar un nuevo resumen."
+FIND_PROBLEMS_HELP = "⚠ Buscar Problemas:\n" \
+                     "Este botón puedes usarlo cuando termines de configurar el bot, " \
+                     "o cuando encuentres algún problema con tu resumen. Detecta " \
+                     "problemas o errores que pueda tener tu configuración."
+CHANGE_TEMPLATE_HELP = """
+📋 Cambiar Plantilla:
+Este botón es fundamental al configurar tu bot, ya que crearás la plantilla con la que el bot hará todos los resúmenes.
+Si usas categorías (más acerca de las categorías más adelante), los mensajes del resumen se colocarán en diferentes lugares de la plantilla en dependencia de la categoría a la que pertenezcan, estos lugares los definirás tú mismo con las etiquetas de $plantilla#$, donde # es el número de la categoría, por ejemplo:
 ——————————
 Resumen del dia:
 
@@ -194,21 +228,74 @@ Programas:
 $plantilla2$
 
 Se seguirá actualizando :3
+—————————— 
+Este un ejemplo de plantilla perfectamente válido que usa categorías.
+Si, por el contrario, no necesitas utilizar categorías ya que tu canal sube un solo tipo de contenido, debes usar la etiqueta $plantilla$, por ejemplo:
 ——————————
-Ese es un ejemplo te plantilla perfectamente válido.
+Resumen diario :D
 
-(Opcional) Además puedes poner una foto que será enviada cada vez que se envíe el resumen al canal.
+$plantilla$
 
-Puedes cambiar cada cuántas horas se envían los resumenes en el menú de Cambiar Horario de Resumenes, puedes hacer que se envíen cada 24h (por defecto), o incluso cada 1h, como prefieras.
+Se actualiza automático :3
+——————————
+"""
+CHANGE_TEMPLATE_PICTURE_HELP = """
+📷  Cambiar Foto de Plantilla:
+Las plantillas pueden estar acompañadas opcionalmente de una foto que será enviada en el mensaje anterior a la plantilla, no se envían en el mismo mensaje ya que los mensajes con fotos tienen un limite de caracteres mucho mas corto que los mensajes de texto normales."""
+CATEGORIES_MENU_HELP = """
+🔠 Categorías:
+Las categorías se usan cuando necesitas dividir el contenido de tu canal en diferentes secciones, por ejemplo "Información", "Juegos", etc. [Más ayuda dentro]"""
+CHANGE_SUMMARY_TIME_HELP = """
+🕑 Cambiar horario:
+Con este botón puedes cambiar cada cuántas horas se envía un resumen al canal, por defecto tiene un valor de 24h. Los resúmenes son actualizados de la manera siguiente:
+-Al enviarse un resumen este contendra todo lo que se ha enviado al canal desde el último resumen.
+-Todo lo que se envíe al canal se seguirá añadiendo al último resumen que se envió.
+-Al enviar el próximo resumen el anterior dejará de actualizarse y este nuevo resumen será el que se actualice."""
+CHANGE_TEMPLATE_FORMAT_HELP = """
+📑 Cambiar Formato de Plantilla:
+Puedes cambiar el formato de cada elemento que sera enviado al resumen, por defecto este formato es:
+-{titulo} {partes}
+Que para el título Forza Horizon 4 y las partes 100-200 quedaría por ejemplo:
+-Forza Horizon 4 [100-200]
+Pero puedes cambiarlo a que sea lo que quieras, siempre y cuando contenga la etiqueta de {titulo} (la etiqueta de las partes es opcional y los corchetes [ ] se añaden automáticamente), por ejemplo:
+=+={partes} {titulo} {partes}=+=
+Quedaría:
+=+=[100-200] Forza Horizon 4 [100-200]=+="""
+CHANGE_PARTS_ID_HELP = """
+📚 Cambiar Identificador de Partes:
+Aquí podrás establecer el identificador con el que el bot busca las partes enviadas en el texto del mensaje, en este ejemplo de mensaje:
+——————————————————
+🌀Juego:  Forza Horizon 4
+🔗Partes Enviadas: 2501-3000
+⚙️Partes Totales:  6204
+🕘Vencimiento:  4am
 
-Paso 3⃣: Categorías.
-En el menú de Categorías (dentro de la configuración) puedes personalizar las categorías de tu plantilla, esto lo puedes hacer si tu canal envía diferentes tipos de contenido. Si no añades ninguna categoría todo lo que subas al canal se colocará en donde pusiste el texto $plantilla$
-Antes de poder hacer nada deberás añadir una categoría, esta será tu primera categoría y tendra asignado el número 0, y en el texto de tu plantilla los post de esta categoría se colocarán donde pusiste el texto de $plantilla0$
-El identificador de la categoría será lo que el bot debe encontrar en la primera linea de una publicacion del canal para considerarlo de esta categoría, por ejemplo, si el identificador de la categoría de Juegos es "🎮Game🎮", entonces en la primera linea de cada publicación de un juego debe estar ese exacto texto.
-Dentro del menú de categorías estas pueden ser reordenadas e incluso eliminadas"""
+📥 Descarga el txt aquí 📥
+
+🔰Mas info sobre el juego aquí 🔰
+
+Para mas como esto visitad @Force_GamesS3 no se van a arrepentir😁🎉
+——————————————————
+El identificador de partes es "🔗Partes Enviadas:", dicho texto será eliminado a la hora de pasar las partes al formato, asi que solo quedaría "2501-3000"
+"""
+
+ADD_CATEGORY_HELP = """
+➕ Añadir Categría:
+Añade una nueva categoría, se te pedirá que des el identificador de esta, el identificador es el texto que esta antes del título de lo que se suba al canal, por ejemplo:
+"🌀Juego:  Forza Horizon 4"
+el identificador seria "🌀Juego:", y en el resumen lo único que se mostraría sería "Forza Horizon 4"
+"""
+REMOVE_CATEGORY_HELP = """
+✖ Eliminar Categoría:
+A cada categoría se le asigna un número comenzando por el 0 que será donde se colocará en la plantilla, por ejemplo los mensajes que entren en la categoría 0 se colocarán en la etiqueta $plantilla0$ de la plantilla.
+Al eliminar se te mostrarán las categorías que has añadido y los números que ocupan, y debes decir el número que quieres que se elimine."""
+REORDER_CATEGORIES_HELP = """
+↕ Reordenar Categorías:
+ Este botón te permitirá seleccionar una categoría y moverla en la lista."""
+
 MAX_KNOWN_CHANNELS = 5
 
-BACKUP_TIME_DIF = 10  # minutes
+BACKUP_TIME_DIF = 20  # minutes
 
 admin_chat_id = -1
 
@@ -449,30 +536,41 @@ def add_to_saved_messages(username, message):
     atusername = get_at_username(username)
     reg_channel = registered_channels[atusername]
 
-    text = ""
+    title = ""
+    category = ""
+    parts = ""
 
     if message.caption is None:
-        for line in message.text.splitlines(False):
-            if line.strip(" \t") != "":
-                text = line
+        text = message.text
     else:
-        for line in message.caption.splitlines(False):
-            if line.strip(" \t") != "":
-                text = line
-
-    if text == "":
-        return
+        text = message.caption
+    split = text.splitlines(False)
 
     if len(reg_channel.categories) > 0:
         for cat in reg_channel.categories:
-            if cat in text:
-                reg_channel.saved_messages.append(
-                    SavedMessage(message.message_id, text, cat))
-                return
+            for i in range(len(split)):
+                if cat in split[i]:
+                    category = cat
+                    if split[i].replace(cat, "").strip() != "":
+                        title = split[i]
+                    else:
+                        for e in range(i, len(split)):
+                            if split[e].strip() != "":
+                                title = split[e]
+                                break
+                    break
     else:
-        reg_channel.saved_messages.append(
-            SavedMessage(message.message_id, text))
-        return
+        for line in split:
+            if line.strip() != "":
+                title = line
+
+    if reg_channel.parts_identifier != "":
+        for line in split:
+            if reg_channel.parts_identifier in line:
+                parts = line
+
+    reg_channel.saved_messages.append(
+        SavedMessage(message.message_id, title, category, parts))
 
 
 def add_to_last_summary_messages(username, message):
@@ -486,16 +584,41 @@ def add_to_last_summary_messages(username, message):
     atusername = get_at_username(username)
     reg_channel = registered_channels[atusername]
 
-    if message.caption is None:
-        text = message.text.splitlines()[0]
-    else:
-        text = message.caption.splitlines()[0]
+    title = ""
+    category = ""
+    parts = ""
 
-    for cat in reg_channel.categories:
-        if cat in text:
-            reg_channel.last_saved_messages.append(
-                SavedMessage(message.message_id, text, cat))
-            return
+    if message.caption is None:
+        text = message.text
+    else:
+        text = message.caption
+    split = text.splitlines(False)
+
+    if len(reg_channel.categories) > 0:
+        for cat in reg_channel.categories:
+            for i in range(len(split)):
+                if cat in split[i]:
+                    category = cat
+                    if split[i].replace(cat, "").strip() != "":
+                        title = split[i]
+                    else:
+                        for e in range(i, len(split)):
+                            if split[e].strip() != "":
+                                title = split[e]
+                                break
+                    break
+    else:
+        for line in split:
+            if line.strip() != "":
+                title = line
+
+    if reg_channel.parts_identifier != "":
+        for line in split:
+            if reg_channel.parts_identifier in line:
+                parts = line
+
+    reg_channel.last_saved_messages.append(
+        SavedMessage(message.message_id, title, category, parts))
 
 
 def get_template_string(username, messages):
@@ -510,13 +633,31 @@ def get_template_string(username, messages):
     atusername = get_at_username(username)
     reg_channel = registered_channels[atusername]
     template = escape_for_telegram(reg_channel.template)
+    parts_id = reg_channel.parts_identifier
     if len(reg_channel.categories) > 0:
         index = 0
         for cat in reg_channel.categories:
             if "$plantilla{}$".format(index) in template:
-                cat_messages = ["\\-[{}]({})".format(escape_for_telegram(m.text.replace(cat, "").strip()), get_message_link(username, m.message_id))
-                                for m in messages
-                                if m.category == cat]
+                if reg_channel.template_format == "":
+                    cat_messages = ["\\-[{}]({})".format(
+                                        escape_for_telegram(m.text.replace(cat, "").strip()),
+                                        get_message_link(username, m.message_id),) +
+                                    ("", "*\\[{}\\]*".format(m.parts.replace(parts_id, "").strip()))
+                                    [reg_channel.parts_identifier != "" and
+                                     m.parts.replace(parts_id, "").strip() != ""]
+                                    for m in messages
+                                    if m.category == cat]
+                else:
+                    cat_messages = [escape_for_telegram(reg_channel.template_format).replace(
+                                    escape_for_telegram("{titulo}"), "[{}]({})".format(
+                                        escape_for_telegram(m.text.replace(cat, "").strip()),
+                                        get_message_link(username, m.message_id),)).replace(
+                                            escape_for_telegram("{partes}"),
+                                            ("", "*\\[{}\\]*".format(m.parts.replace(parts_id, "").strip()))
+                                            [reg_channel.parts_identifier != "" and
+                                             m.parts.replace(parts_id, "").strip() != ""])
+                                    for m in messages
+                                    if m.category == cat]
                 if len(cat_messages) > 0:
                     template = template.replace("$plantilla{}$".format(index), "\n".join(cat_messages))
                 else:
@@ -524,9 +665,24 @@ def get_template_string(username, messages):
             index += 1
     elif "$plantilla$" in template:
         if len(messages) > 0:
-            final_messages = ["\\-[{}]({})".format(escape_for_telegram(m.text), get_message_link(username, m.message_id)) for m
-                              in
-                              messages]
+            if reg_channel.template_format == "":
+                final_messages = ["\\-[{}]({})".format(
+                    escape_for_telegram(m.text.strip()),
+                    get_message_link(username, m.message_id), ) +
+                                ("", "*\\[{}\\]*".format(m.parts.replace(parts_id, "").strip()))
+                                [reg_channel.parts_identifier != "" and
+                                 m.parts.replace(parts_id, "").strip() != ""]
+                                for m in messages]
+            else:
+                final_messages = [escape_for_telegram(reg_channel.template_format).replace(
+                    escape_for_telegram("{titulo}"), "[{}]({})".format(
+                        escape_for_telegram(m.text.strip()),
+                        get_message_link(username, m.message_id), )).replace(
+                    escape_for_telegram("{partes}"),
+                    ("", "*\\[{}\\]*".format(m.parts.replace(parts_id, "").strip()))
+                    [reg_channel.parts_identifier != "" and
+                     m.parts.replace(parts_id, "").strip() != ""])
+                    for m in messages]
             template = template.replace("$plantilla$", "\n".join(final_messages))
         else:
             template = template.replace("$plantilla$", "\\-")
@@ -693,9 +849,12 @@ def go_to_customization(update, context):
             [SEND_NOW_MARKUP],
             [FIND_PROBLEMS_MARKUP],
             [CHANGE_TEMPLATE_MARKUP, SEE_TEMPLATE_MARKUP],
-            [CHANGE_TEMPLATE_PICTURE_MARKUP, SEE_TEMPLATE_PICTURE_MARKUP],
+            [CHANGE_TEMPLATE_FORMAT_MARKUP, DELETE_TEMPLATE_FORMAT_MARKUP],
+            [CHANGE_TEMPLATE_PICTURE_MARKUP, SEE_TEMPLATE_PICTURE_MARKUP, DELETE_TEMPLATE_PICTURE_MARKUP],
+            [CHANGE_PARTS_ID_MARKUP, DELETE_PARTS_ID_MARKUP],
             [CATEGORIES_MENU_MARKUP],
             [CHANGE_SUMMARY_TIME_MARKUP],
+            [HELP_MARKUP],
             [CANCEL_MARKUP]
         ], resize_keyboard=True
     )
@@ -715,6 +874,7 @@ def go_to_categories(update, context):
             [SEE_CATEGORIES_MARKUP],
             [ADD_CATEGORY_MARKUP, REMOVE_CATEGORY_MARKUP],
             [REORDER_CATEGORIES_MARKUP],
+            [HELP_MARKUP],
             [CANCEL_MARKUP],
         ], resize_keyboard=True
     )
@@ -746,8 +906,6 @@ def find_problems(update, context):
         update (telegram.Update)
         context (telegram.ext.CallbackContext)
 
-    Returns:
-
     """
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
     reg_channel = registered_channels[reg_user.context_data['channel']]
@@ -756,6 +914,8 @@ def find_problems(update, context):
     missing_template = False
     missing_template_tags = []
     missing_main_template_tag = False
+    using_parts_but_no_id = False
+    using_parts_id_but_no_format = False
 
     if reg_channel.template == "":
         missing_template = True
@@ -768,20 +928,165 @@ def find_problems(update, context):
         if "$plantilla$" not in reg_channel.template:
             missing_main_template_tag = True
 
+    if reg_channel.template_format != "":
+        if "{partes}" in reg_channel.template_format:
+            if reg_channel.parts_identifier == "":
+                using_parts_but_no_id = True
+        elif reg_channel.parts_identifier != "":
+            using_parts_id_but_no_format = True
+
     problems_text = ""
     if missing_template:
-        problems_text = "No has establecido una plantilla para este resumen y no podrá enviarse"
+        problems_text = "❌ No has establecido una plantilla para este resumen y no podrá enviarse"
     elif missing_main_template_tag:
-        problems_text = "A tu plantilla le falta el texto '$plantilla$' para que pueda funcionar correctamente"
+        problems_text = "❌ A tu plantilla le falta el texto '$plantilla$' para que pueda funcionar correctamente"
     elif len(missing_template_tags) > 0:
-        problems_text = "Tu resumen utiliza categorías, sin embargo no " \
+        problems_text = "❌ Tu resumen utiliza categorías, sin embargo no " \
                         "se encontraron las siguientes etiquetas:\n\n{}\n\n" \
                         "Recuerda que cuando usas categorías la etiqueta $plantilla$ no hace " \
                         "nada".format("\n".join(missing_template_tags))
-    else:
-        problems_text = "Perfecto!\nNo pude encontrar ningún problema en tu resumen!\n" \
-                        "Si no está funcionando escríbele a @LeoAmaro01, el creador del bot"
+    if using_parts_but_no_id:
+        problems_text += "\n⚠ Tu formato de plantilla declara que usa identificador de partes, pero no has establecido uno"
+    elif using_parts_id_but_no_format:
+        problems_text += "\n⚠ Tu formato de plantilla declara que no usa identificador de partes, pero has establecido uno"
+
+    if problems_text == "":
+        problems_text = "✅ Perfecto!\nNo pude encontrar ningún problema en tu resumen!\n" \
+                        "Si no está funcionando escríbele a @LeoAmaro01, el creador del bot!"
     update.message.reply_text(problems_text)
+
+
+def request_change_format(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.effective_user, update.effective_chat)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+    markup = ReplyKeyboardMarkup(
+        [
+            [CANCEL_MARKUP]
+        ], resize_keyboard=True
+    )
+    update.message.reply_text("Introduzca el nuevo formato que desea utilizar{}".format(
+        (", este canal está utilizando el formato por defecto\n'-{titulo} {partes}'",
+         ", el formato actual es:\n{}".format(reg_channel.template_format))
+        [reg_channel.template_format != ""]), reply_markup=markup)
+    reg_user.status = "requested_format"
+
+
+def change_format(update, context):
+    """
+
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+
+    """
+    reg_user = get_reg_user(update.effective_user, update.effective_chat)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+    if "{titulo}" in update.message.text:
+        reg_channel.template_format = update.message.text
+        update.message.reply_text("Formato cambiado! :D")
+        go_to_customization(update, context)
+    else:
+        update.message.reply_text("El formato debe contener la etiqueta {titulo} >:/")
+
+
+def delete_format(update, context):
+    """
+
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+
+    """
+    reg_user = get_reg_user(update.effective_user, update.effective_chat)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+    reg_channel.template_format = ""
+    update.message.reply_text("Formato eliminado, usa {} para crear uno nuevo.".format(CHANGE_TEMPLATE_FORMAT_MARKUP))
+
+
+def request_change_parts_id(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.effective_user, update.effective_chat)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+    markup = ReplyKeyboardMarkup(
+        [
+            [CANCEL_MARKUP]
+        ], resize_keyboard=True
+    )
+    update.message.reply_text("Introduzca el nuevo identificador de partes que desea utilizar{}".format(
+        ("", ", el identificador actual es:\n{}".format(reg_channel.parts_identifier))
+        [reg_channel.parts_identifier != ""]), reply_markup=markup)
+    reg_user.status = "requested_parts_id"
+
+
+def change_parts_id(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.effective_user, update.effective_chat)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+    reg_channel.parts_identifier = update.message.text
+    update.message.reply_text("Identificador cambiado! :D")
+    go_to_customization(update, context)
+
+
+def delete_parts_id(update, context):
+    """
+
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+
+    """
+    reg_user = get_reg_user(update.effective_user, update.effective_chat)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+    reg_channel.parts_identifier = ""
+    update.message.reply_text("Identificador eliminado, usa {} para crear uno nuevo.".format(CHANGE_PARTS_ID_MARKUP))
+
+
+def delete_template_picture(update, context):
+    """
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+    """
+    reg_user = get_reg_user(update.effective_user, update.effective_chat)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+    reg_channel.template_picture = ""
+    update.message.reply_text("Foto eliminada, usa {} para establecer una nueva.".format(CHANGE_TEMPLATE_PICTURE_MARKUP))
+
+
+def base_help(update, context):
+    update.message.reply_text(REGISTER_HELP)
+    update.message.reply_text(UNREGISTER_HELP)
+    update.message.reply_text(CUSTOMIZE_HELP)
+
+
+def customize_help(update, context):
+    update.message.reply_text(SEND_NOW_HELP)
+    update.message.reply_text(FIND_PROBLEMS_HELP)
+    update.message.reply_text(CHANGE_TEMPLATE_HELP)
+    update.message.reply_text(CHANGE_TEMPLATE_PICTURE_HELP)
+    update.message.reply_text(CATEGORIES_MENU_HELP)
+    update.message.reply_text(CHANGE_SUMMARY_TIME_HELP)
+    update.message.reply_text(CHANGE_TEMPLATE_FORMAT_HELP)
+    update.message.reply_text(CHANGE_PARTS_ID_HELP)
+
+
+def categories_help(update, context):
+    update.message.reply_text(ADD_CATEGORY_HELP)
+    update.message.reply_text(REMOVE_CATEGORY_HELP)
+    update.message.reply_text(REORDER_CATEGORIES_HELP)
 
 
 def see_categories(update, context):
@@ -1304,7 +1609,7 @@ def help_handler(update, context):
         update (telegram.Update)
         context (telegram.ext.CallbackContext)
     """
-    update.message.reply_text(HELP_TEXT)
+    update.message.reply_text("Utiliza los botones de ayuda para obtener ayuda sobre el bot")
 
 
 def backup(update, context):
@@ -1389,7 +1694,7 @@ def process_private_message(update, context):
         elif text == UNREGISTER_MARKUP:
             request_unregister_channel(update, context)
         elif text == HELP_MARKUP:
-            help_handler(update, context)
+            base_help(update, context)
         else:
             update.message.reply_text("Guat? No entendí :/ (recuerda que soy un bot y soy tonto X'''D")
     elif status == "requested_customization":
@@ -1418,6 +1723,18 @@ def process_private_message(update, context):
         elif text == CANCEL_MARKUP:
             update.message.reply_text("Cancelado")
             go_to_base(update, context)
+        elif text == HELP_MARKUP:
+            customize_help(update, context)
+        elif text == DELETE_TEMPLATE_PICTURE_MARKUP:
+            delete_template_picture(update, context)
+        elif text == CHANGE_TEMPLATE_FORMAT_MARKUP:
+            request_change_format(update, context)
+        elif text == CHANGE_PARTS_ID_MARKUP:
+            request_change_parts_id(update, context)
+        elif text == DELETE_PARTS_ID_MARKUP:
+            delete_parts_id(update, context)
+        elif text == DELETE_TEMPLATE_FORMAT_MARKUP:
+            delete_format(update, context)
         else:
             update.message.reply_text("Guat? No entendí :/ (recuerda que soy un bot y soy tonto X'''D")
     elif status == "categories":
@@ -1429,6 +1746,8 @@ def process_private_message(update, context):
             see_categories(update, context)
         elif text == REORDER_CATEGORIES_MARKUP:
             request_reorder_categories(update, context)
+        elif text == HELP_MARKUP:
+            categories_help(update, context)
         elif text == CANCEL_MARKUP:
             go_to_customization(update, context)
     elif status == "reordering_categories":
@@ -1481,6 +1800,16 @@ def process_private_message(update, context):
             go_to_categories(update, context)
         else:
             reorder_categories(update, context)
+    elif status == "requested_format":
+        if text == CANCEL_MARKUP:
+            go_to_customization(update, context)
+        else:
+            change_format(update, context)
+    elif status == "requested_parts_id":
+        if text == CANCEL_MARKUP:
+            go_to_customization(update, context)
+        else:
+            change_parts_id(update, context)
     elif status == "":
         go_to_base(update, context)
 
