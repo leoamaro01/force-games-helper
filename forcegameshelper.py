@@ -58,8 +58,8 @@ def decode_bot_data(dct: dict):
                                  categories=dct['categories'],
                                  last_summary_time=datetime.fromisoformat(dct['last_summary_time']),
                                  last_summary_message_text=dct['last_summary_message_text'],
-                                 #template_format=dct['template_format'],
-                                 #parts_identifier=dct['parts_identifier']
+                                 template_format=dct['template_format'],
+                                 parts_identifier=dct['parts_identifier']
                                  )
     elif '__reg_user__' in dct:
         return RegisteredUser(chat_id=dct['chat_id'],
@@ -70,7 +70,7 @@ def decode_bot_data(dct: dict):
         return SavedMessage(message_id=dct['id'],
                             text=dct['text'],
                             category=dct['cat'],
-                            #parts=dct['parts']
+                            parts=dct['parts']
                             )
     return dct
 
