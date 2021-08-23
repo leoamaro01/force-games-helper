@@ -688,6 +688,7 @@ def get_template_string(username, messages):
             template = template.replace("$plantilla$", "\n".join(final_messages))
         else:
             template = template.replace("$plantilla$", "\\-")
+    template += "\n🤖📝 Bot de resúmenes @ForceGamesHelperBot 📝🤖"
     return template
 
 
@@ -1006,8 +1007,11 @@ def delete_format(update, context):
     """
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
     reg_channel = registered_channels[reg_user.context_data['channel']]
-    reg_channel.template_format = ""
-    update.message.reply_text("Formato eliminado, usa {} para crear uno nuevo.".format(CHANGE_TEMPLATE_FORMAT_MARKUP))
+    if reg_channel.template_format != "":
+        reg_channel.template_format = ""
+        update.message.reply_text("Formato eliminado, usa {} para crear uno nuevo.".format(CHANGE_TEMPLATE_FORMAT_MARKUP))
+    else:
+        update.message.reply_text("No se ha establecido un formato para este canal")
 
 
 def request_change_parts_id(update, context):
@@ -1052,8 +1056,11 @@ def delete_parts_id(update, context):
     """
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
     reg_channel = registered_channels[reg_user.context_data['channel']]
-    reg_channel.parts_identifier = ""
-    update.message.reply_text("Identificador eliminado, usa {} para crear uno nuevo.".format(CHANGE_PARTS_ID_MARKUP))
+    if reg_channel.parts_identifier != "":
+        reg_channel.parts_identifier = ""
+        update.message.reply_text("Identificador eliminado, usa {} para crear uno nuevo.".format(CHANGE_PARTS_ID_MARKUP))
+    else:
+        update.message.reply_text("No se ha establecido un identificador de partes para este canal")
 
 
 def delete_template_picture(update, context):
@@ -1064,8 +1071,11 @@ def delete_template_picture(update, context):
     """
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
     reg_channel = registered_channels[reg_user.context_data['channel']]
-    reg_channel.template_picture = ""
-    update.message.reply_text("Foto eliminada, usa {} para establecer una nueva.".format(CHANGE_TEMPLATE_PICTURE_MARKUP))
+    if reg_channel.template != "":
+        reg_channel.template_picture = ""
+        update.message.reply_text("Foto eliminada, usa {} para establecer una nueva.".format(CHANGE_TEMPLATE_PICTURE_MARKUP))
+    else:
+        update.message.reply_text("No se ha establecido una foto de resumen para este canal")
 
 
 def base_help(update, context):
@@ -1146,13 +1156,18 @@ def request_remove_category(update, context):
         context (telegram.ext.CallbackContext)
     """
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
-    markup = ReplyKeyboardMarkup(
-        [
-            [CANCEL_MARKUP]
-        ], resize_keyboard=True
-    )
-    update.message.reply_text("Cuál es el número de la categoría que desea eliminar?", reply_markup=markup)
-    reg_user.status = "requested_remove_category"
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+    if len(reg_channel.categories) > 0:
+        markup = ReplyKeyboardMarkup(
+            [
+                [CANCEL_MARKUP]
+            ], resize_keyboard=True
+        )
+        update.message.reply_text("Cuál es el número de la categoría que desea eliminar?",
+                                  reply_markup=markup)
+        reg_user.status = "requested_remove_category"
+    else:
+        update.message.reply_text("No se ha establecido ninguna categoría en este canal")
 
 
 def remove_category(update, context):
@@ -1389,7 +1404,11 @@ def see_template(update, context):
         context (telegram.ext.CallbackContext)
     """
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
-    update.message.reply_text(registered_channels[reg_user.context_data['channel']].template)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+    if reg_channel.template != "":
+        update.message.reply_text(reg_channel.template)
+    else:
+        update.message.reply_text("No se ha establecido una plantilla para este canal")
 
 
 def request_change_template_picture(update, context):
@@ -1427,7 +1446,11 @@ def see_template_picture(update, context):
         context (telegram.ext.CallbackContext)
     """
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
-    update.message.reply_photo(registered_channels[reg_user.context_data['channel']].template_picture)
+    reg_channel = registered_channels[reg_user.context_data['channel']]
+    if reg_channel.template_picture != "":
+        update.message.reply_photo(reg_channel.template_picture)
+    else:
+        update.message.reply_text("No ha establecido una foto para este canal.")
 
 
 def request_change_summary_time(update, context):
