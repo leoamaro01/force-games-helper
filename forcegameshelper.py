@@ -458,11 +458,17 @@ def post_summary(channel_username):
     reg_channel = registered_channels[atusername]
 
     bot_member = get_bot_chat_member(atusername)
+    can_pin = True
     if not bot_member.can_post_messages:
         bot.send_message(chat_id=admin_chat_id,
                          text="Send Message permission denied in {}".
                          format(atusername))
         return False
+    if not bot_member.can_edit_messages:
+        bot.send_message(chat_id=admin_chat_id,
+                         text="Edit Message permission denied in {}".
+                         format(atusername))
+        can_pin = False
 
     if reg_channel.template != "":
         if reg_channel.template_picture is not None and reg_channel.template_picture != "":
@@ -472,7 +478,8 @@ def post_summary(channel_username):
                                       text=text,
                                       parse_mode='MarkdownV2',
                                       disable_web_page_preview=True).message_id
-        bot.pin_chat_message(reg_channel.chat_id, summary_id)
+        if can_pin:
+            bot.pin_chat_message(reg_channel.chat_id, summary_id)
         reg_channel.last_summary_message_text = text
         reg_channel.last_summary_message_id = summary_id
         reg_channel.last_saved_messages = reg_channel.saved_messages
@@ -519,12 +526,15 @@ def add_to_last_summary(chat, message):
         add_to_last_summary_messages(atusername, message)
         text = get_template_string(atusername, reg_channel.last_saved_messages)
         if text != reg_channel.last_summary_message_text:
-            bot.edit_message_text(chat_id=chat.id,
-                                  message_id=reg_channel.last_summary_message_id,
-                                  text=text,
-                                  disable_web_page_preview=True,
-                                  parse_mode='MarkdownV2')
-            reg_channel.last_summary_message_text = text
+            try:
+                bot.edit_message_text(chat_id=chat.id,
+                                      message_id=reg_channel.last_summary_message_id,
+                                      text=text,
+                                      disable_web_page_preview=True,
+                                      parse_mode='MarkdownV2')
+                reg_channel.last_summary_message_text = text
+            except TelegramError:
+                reg_channel.last_summary_message_id = -1
 
 
 def add_to_saved_messages(username, message):
