@@ -1920,8 +1920,6 @@ def main():
                           url_path=TOKEN,
                           webhook_url='https://forcegameshelper.herokuapp.com/' + TOKEN)
 
-    auto_restore()
-
     updater.idle()
 
 
