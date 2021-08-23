@@ -546,7 +546,7 @@ def add_to_saved_messages(username, message):
         text = message.text
     else:
         text = message.caption
-    split = text.splitlines(False)
+    split = text.splitlines()
 
     if len(reg_channel.categories) > 0:
         for cat in reg_channel.categories:
@@ -556,7 +556,7 @@ def add_to_saved_messages(username, message):
                     if split[i].replace(cat, "").strip() != "":
                         title = split[i]
                     else:
-                        for e in range(i, len(split)):
+                        for e in range(i + 1, len(split)):
                             if split[e].strip() != "":
                                 title = split[e]
                                 break
@@ -604,7 +604,7 @@ def add_to_last_summary_messages(username, message):
                     if split[i].replace(cat, "").strip() != "":
                         title = split[i]
                     else:
-                        for e in range(i, len(split)):
+                        for e in range(i + 1, len(split)):
                             if split[e].strip() != "":
                                 title = split[e]
                                 break
@@ -644,7 +644,7 @@ def get_template_string(username, messages):
                     cat_messages = ["\\-[{}]({})".format(
                                         escape_for_telegram(m.text.replace(cat, "").strip()),
                                         get_message_link(username, m.message_id),) +
-                                    ("", "*\\[{}\\]*".format(m.parts.replace(parts_id, "").strip()))
+                                    ("", "*\\[{}\\]*".format(escape_for_telegram(m.parts.replace(parts_id, "").strip())))
                                     [reg_channel.parts_identifier != "" and
                                      m.parts.replace(parts_id, "").strip() != ""]
                                     for m in messages
@@ -655,7 +655,7 @@ def get_template_string(username, messages):
                                         escape_for_telegram(m.text.replace(cat, "").strip()),
                                         get_message_link(username, m.message_id),)).replace(
                                             escape_for_telegram("{partes}"),
-                                            ("", "*\\[{}\\]*".format(m.parts.replace(parts_id, "").strip()))
+                                            ("", "*\\[{}\\]*".format(escape_for_telegram(m.parts.replace(parts_id, "").strip())))
                                             [reg_channel.parts_identifier != "" and
                                              m.parts.replace(parts_id, "").strip() != ""])
                                     for m in messages
@@ -671,7 +671,7 @@ def get_template_string(username, messages):
                 final_messages = ["\\-[{}]({})".format(
                     escape_for_telegram(m.text.strip()),
                     get_message_link(username, m.message_id), ) +
-                                ("", "*\\[{}\\]*".format(m.parts.replace(parts_id, "").strip()))
+                                ("", "*\\[{}\\]*".format(escape_for_telegram(m.parts.replace(parts_id, "").strip())))
                                 [reg_channel.parts_identifier != "" and
                                  m.parts.replace(parts_id, "").strip() != ""]
                                 for m in messages]
@@ -681,7 +681,7 @@ def get_template_string(username, messages):
                         escape_for_telegram(m.text.strip()),
                         get_message_link(username, m.message_id), )).replace(
                     escape_for_telegram("{partes}"),
-                    ("", "*\\[{}\\]*".format(m.parts.replace(parts_id, "").strip()))
+                    ("", "*\\[{}\\]*".format(escape_for_telegram(m.parts.replace(parts_id, "").strip())))
                     [reg_channel.parts_identifier != "" and
                      m.parts.replace(parts_id, "").strip() != ""])
                     for m in messages]
