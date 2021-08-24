@@ -1710,6 +1710,8 @@ def process_private_message(update, context):
         update (telegram.Update)
         context (telegram.ext.CallbackContext)
     """
+    if update.message is None:
+        return
     auto_restore()
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
     status = reg_user.status
@@ -1850,6 +1852,8 @@ def process_private_photo(update, context):
         context (telegram.ext.CallbackContext)
 
     """
+    if update.message is None:
+        return
     auto_restore()
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
     status = reg_user.status
@@ -1868,6 +1872,9 @@ def process_channel_update(update, context):
 
     """
     auto_restore()
+    if update.channel_post is None:
+        return
+
     chat = update.effective_chat
     atusername = get_at_username(chat.username)
     if atusername not in registered_channels:
