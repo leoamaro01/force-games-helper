@@ -296,6 +296,7 @@ REORDER_CATEGORIES_HELP = """
  Este botón te permitirá seleccionar una categoría y moverla en la lista."""
 
 MAX_KNOWN_CHANNELS = 5
+MAX_CHARACTERS_IN_TITLE = 64
 
 BACKUP_TIME_DIF = 20  # minutes
 
@@ -390,9 +391,7 @@ def stats(update, context):
 
 
 def auto_backup():
-    logger.info("Trying to auto-backup")
     if bot_cloud is not None:
-        logger.info("Performing timed Bot Data Backup")
         serialize_bot_data("bot_data.json")
         file = open("bot_data.json", "rb")
         result = bot_cloud.send_document(document=file, filename="bot_data.json")
@@ -460,14 +459,8 @@ def post_summary(channel_username):
     bot_member = get_bot_chat_member(atusername)
     can_pin = True
     if not bot_member.can_post_messages:
-        bot.send_message(chat_id=admin_chat_id,
-                         text="Send Message permission denied in {}".
-                         format(atusername))
         return False
     if not bot_member.can_edit_messages:
-        bot.send_message(chat_id=admin_chat_id,
-                         text="Edit Message permission denied in {}".
-                         format(atusername))
         can_pin = False
 
     if reg_channel.template != "":
