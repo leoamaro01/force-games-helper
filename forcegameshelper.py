@@ -597,7 +597,7 @@ def add_to_saved_messages(username, message):
 
     title, category, parts = get_message_data(username, message)
 
-    if title != "" and (category != "" or len(reg_channel.categories) != 0):
+    if title != "" and (category != "" or len(reg_channel.categories) == 0):
         reg_channel.saved_messages.append(
             SavedMessage(message.message_id, title, category, parts))
 
