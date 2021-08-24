@@ -313,9 +313,6 @@ else:
 update_checker: list[datetime] = []
 
 
-# TODO automatic client deletion if last update was too long
-
-
 def start(update, context):
     """
     Args:
@@ -355,9 +352,15 @@ def broadcast(update, context):
     if update.effective_user.id == admin_chat_id:
         if update.message.reply_to_message is not None:
             for user in registered_users.values():
-                bot.copy_message(chat_id=user.chat_id, from_chat_id=update.effective_chat.id,
-                                 message_id=update.message.reply_to_message.message_id)
+                try:
+                    bot.copy_message(chat_id=user.chat_id, from_chat_id=update.effective_chat.id,
+                                     message_id=update.message.reply_to_message.message_id)
+                except TelegramError:
+                    registered_users.pop(str(user.chat_id))
 
+
+def cleanup():  # TODO
+    return
 
 def get_chat_id(update, context):
     """
@@ -615,7 +618,7 @@ def add_to_last_summary_messages(username, message):
 
     title, category, parts = get_message_data(username, message)
 
-    if title != "" and (category != "" or len(reg_channel.categories) != 0):
+    if title != "" and (category != "" or len(reg_channel.categories) == 0):
         reg_channel.last_saved_messages.append(
             SavedMessage(message.message_id, title, category, parts))
 
@@ -1694,7 +1697,7 @@ def serialize_bot_data(filename):
         'registered_channels': registered_channels,
         'registered_users': registered_users
     }
-    json.dump(bot_data, file, cls=BotDataEncoder)
+    json.dump(bot_data, file, cls=BotDataEncoder, indent="\t")
     file.close()
 
 
