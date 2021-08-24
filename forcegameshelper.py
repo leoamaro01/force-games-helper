@@ -530,12 +530,12 @@ def add_to_last_summary(chat, message):
                 reg_channel.last_summary_message_id = -1
 
 
-def add_to_saved_messages(username, message):
+def get_message_data(username, message):
     """
 
-    Args:
-        username (str)
-        message (telegram.Message)
+       Args:
+           username (str)
+           message (telegram.Message)
 
     """
     atusername = get_at_username(username)
@@ -545,10 +545,13 @@ def add_to_saved_messages(username, message):
     category = ""
     parts = ""
 
-    if message.caption is None:
+    if message.text is not None:
         text = message.text
-    else:
+    elif message.caption is not None:
         text = message.caption
+    else:
+        return
+
     split = text.splitlines()
 
     if len(reg_channel.categories) > 0:
@@ -556,26 +559,47 @@ def add_to_saved_messages(username, message):
             for i in range(len(split)):
                 if cat in split[i]:
                     category = cat
-                    if split[i].replace(cat, "").strip() != "":
-                        title = split[i]
+                    without_cat = split[i].replace(cat, "")
+                    if without_cat != "" and not without_cat.isspace():
+                        title = without_cat
                     else:
                         for e in range(i + 1, len(split)):
-                            if split[e].strip() != "":
+                            if split[e] != "" and not split[e].isspace():
                                 title = split[e]
                                 break
                     break
     else:
-        for line in split:
-            if line.strip() != "":
-                title = line
+        for i in range(len(split)):
+            if split[i] != "" and not split[i].isspace():
+                title = split[i]
 
     if reg_channel.parts_identifier != "":
         for line in split:
             if reg_channel.parts_identifier in line:
                 parts = line
 
-    reg_channel.saved_messages.append(
-        SavedMessage(message.message_id, title, category, parts))
+    if len(title) > MAX_CHARACTERS_IN_TITLE:
+        title = title[0:MAX_CHARACTERS_IN_TITLE - 1] + "..."
+
+    return title, category, parts
+
+
+def add_to_saved_messages(username, message):
+    """
+
+       Args:
+           username (str)
+           message (telegram.Message)
+
+    """
+    atusername = get_at_username(username)
+    reg_channel = registered_channels[atusername]
+
+    title, category, parts = get_message_data(username, message)
+
+    if title != "" and (category != "" or len(reg_channel.categories) != 0):
+        reg_channel.saved_messages.append(
+            SavedMessage(message.message_id, title, category, parts))
 
 
 def add_to_last_summary_messages(username, message):
@@ -589,41 +613,11 @@ def add_to_last_summary_messages(username, message):
     atusername = get_at_username(username)
     reg_channel = registered_channels[atusername]
 
-    title = ""
-    category = ""
-    parts = ""
+    title, category, parts = get_message_data(username, message)
 
-    if message.caption is None:
-        text = message.text
-    else:
-        text = message.caption
-    split = text.splitlines(False)
-
-    if len(reg_channel.categories) > 0:
-        for cat in reg_channel.categories:
-            for i in range(len(split)):
-                if cat in split[i]:
-                    category = cat
-                    if split[i].replace(cat, "").strip() != "":
-                        title = split[i]
-                    else:
-                        for e in range(i + 1, len(split)):
-                            if split[e].strip() != "":
-                                title = split[e]
-                                break
-                    break
-    else:
-        for line in split:
-            if line.strip() != "":
-                title = line
-
-    if reg_channel.parts_identifier != "":
-        for line in split:
-            if reg_channel.parts_identifier in line:
-                parts = line
-
-    reg_channel.last_saved_messages.append(
-        SavedMessage(message.message_id, title, category, parts))
+    if title != "" and (category != "" or len(reg_channel.categories) != 0):
+        reg_channel.last_saved_messages.append(
+            SavedMessage(message.message_id, title, category, parts))
 
 
 def get_template_string(username, messages):
@@ -691,7 +685,7 @@ def get_template_string(username, messages):
             template = template.replace("$plantilla$", "\n".join(final_messages))
         else:
             template = template.replace("$plantilla$", "\\-")
-    template += "\n🤖📝 Bot de resúmenes @ForceGamesHelperBot 📝🤖"
+    template += "\n🤖📝 [\\[Bot de Resúmenes\\]](t.me/ForceGamesHelperBot) 📝🤖"
     return template
 
 
