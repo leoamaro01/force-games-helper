@@ -575,15 +575,14 @@ def get_message_data(username, message):
     else:
         for line in split:
             if line != "" and not line.isspace():
-                logger.info("Selected '{}'".format(line))
                 title = line
-            else:
-                logger.info("Skipping '{}'".format(line))
+                break
 
     if reg_channel.parts_identifier != "":
         for line in split:
             if reg_channel.parts_identifier in line:
                 parts = line
+                break
 
     if len(title) > MAX_CHARACTERS_IN_TITLE:
         title = title[0:MAX_CHARACTERS_IN_TITLE - 1] + "..."
