@@ -362,6 +362,7 @@ def broadcast(update, context):
 def cleanup():  # TODO
     return
 
+
 def get_chat_id(update, context):
     """
     Args:
@@ -572,9 +573,12 @@ def get_message_data(username, message):
                                 break
                     break
     else:
-        for i in range(len(split)):
-            if split[i] != "" and not split[i].isspace():
-                title = split[i]
+        for line in split:
+            if line != "" and not line.isspace():
+                logger.info("Selected '{}'".format(line))
+                title = line
+            else:
+                logger.info("Skipping '{}'".format(line))
 
     if reg_channel.parts_identifier != "":
         for line in split:
