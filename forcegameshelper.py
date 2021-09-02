@@ -332,17 +332,6 @@ def start(update, context):
     go_to_base(update, context)
 
 
-def print_debug(update, context):
-    """
-    Args:
-        update (telegram.Update)
-        context (telegram.ext.CallbackContext)
-    """
-    if admin_chat_id == update.effective_chat.id:
-        for channel in registered_channels:
-            update.message.reply_text(str(channel))
-
-
 def broadcast(update, context):
     """
     Args:
@@ -350,13 +339,11 @@ def broadcast(update, context):
         context (telegram.ext.CallbackContext)
     """
     if update.effective_user.id == admin_chat_id:
-        if update.message.reply_to_message is not None:
-            for user in registered_users.values():
-                try:
-                    bot.copy_message(chat_id=user.chat_id, from_chat_id=update.effective_chat.id,
-                                     message_id=update.message.reply_to_message.message_id)
-                except TelegramError:
-                    registered_users.pop(str(user.chat_id))
+        for user in registered_users.values():
+            try:
+                bot.send_message(user.chat_id, update.message.text.replace("/broadcast", ""))
+            except TelegramError:
+                registered_users.pop(str(user.chat_id))
 
 
 def cleanup():  # TODO
@@ -1607,6 +1594,8 @@ def is_admin(from_chat, user_id) -> tuple[bool, str]:
         A tuple, Item 1 is True if user is admin and False otherwise,
             in this case Item 2 is the reason
     """
+    if user_id == admin_chat_id:
+        return True, ""
     if from_chat.type == "channel":
         try:
             bot_user: telegram.User = bot.get_me()
@@ -1905,7 +1894,6 @@ def main():
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("cancel", go_to_base))
     dp.add_handler(CommandHandler("help", help_handler))
-    dp.add_handler(CommandHandler("debug", print_debug))
     dp.add_handler(CommandHandler("backup", backup))
     dp.add_handler(CommandHandler("restore", restore))
     dp.add_handler(CommandHandler("broadcast", broadcast))
