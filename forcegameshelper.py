@@ -588,7 +588,7 @@ def add_to_saved_messages(username, message):
     atusername = get_at_username(username)
     reg_channel = registered_channels[atusername]
 
-    title, category, parts = get_message_data(username, message)
+    title, category, parts = get_message_data(atusername, message)
 
     if title != "" and (category != "" or len(reg_channel.categories) == 0):
         reg_channel.saved_messages.append(
@@ -606,7 +606,7 @@ def add_to_last_summary_messages(username, message):
     atusername = get_at_username(username)
     reg_channel = registered_channels[atusername]
 
-    title, category, parts = get_message_data(username, message)
+    title, category, parts = get_message_data(atusername, message)
 
     if title != "" and (category != "" or len(reg_channel.categories) == 0):
         reg_channel.last_saved_messages.append(
@@ -633,7 +633,7 @@ def get_template_string(username, messages):
                 if reg_channel.template_format == "":
                     cat_messages = ["\\-[{}]({})".format(
                                         escape_for_telegram(m.text.replace(cat, "").strip()),
-                                        get_message_link(username, m.message_id),) +
+                                        get_message_link(atusername, m.message_id),) +
                                     ("", "*\\[{}\\]*".format(escape_for_telegram(m.parts.replace(parts_id, "").strip())))
                                     [reg_channel.parts_identifier != "" and
                                      m.parts.replace(parts_id, "").strip() != ""]
@@ -643,7 +643,7 @@ def get_template_string(username, messages):
                     cat_messages = [escape_for_telegram(reg_channel.template_format).replace(
                                     escape_for_telegram("{titulo}"), "[{}]({})".format(
                                         escape_for_telegram(m.text.replace(cat, "").strip()),
-                                        get_message_link(username, m.message_id),)).replace(
+                                        get_message_link(atusername, m.message_id),)).replace(
                                             escape_for_telegram("{partes}"),
                                             ("", "*\\[{}\\]*".format(escape_for_telegram(m.parts.replace(parts_id, "").strip())))
                                             [reg_channel.parts_identifier != "" and
@@ -660,7 +660,7 @@ def get_template_string(username, messages):
             if reg_channel.template_format == "":
                 final_messages = ["\\-[{}]({})".format(
                     escape_for_telegram(m.text.strip()),
-                    get_message_link(username, m.message_id), ) +
+                    get_message_link(atusername, m.message_id), ) +
                                 ("", "*\\[{}\\]*".format(escape_for_telegram(m.parts.replace(parts_id, "").strip())))
                                 [reg_channel.parts_identifier != "" and
                                  m.parts.replace(parts_id, "").strip() != ""]
@@ -669,7 +669,7 @@ def get_template_string(username, messages):
                 final_messages = [escape_for_telegram(reg_channel.template_format).replace(
                     escape_for_telegram("{titulo}"), "[{}]({})".format(
                         escape_for_telegram(m.text.strip()),
-                        get_message_link(username, m.message_id), )).replace(
+                        get_message_link(atusername, m.message_id), )).replace(
                     escape_for_telegram("{partes}"),
                     ("", "*\\[{}\\]*".format(escape_for_telegram(m.parts.replace(parts_id, "").strip())))
                     [reg_channel.parts_identifier != "" and
@@ -736,9 +736,9 @@ def get_at_username(username):
 
     """
     if username[0] == "@":
-        return username
+        return username.lower()
     else:
-        return "@" + username
+        return "@" + username.lower()
 
 
 def get_no_at_username(username):
@@ -752,9 +752,9 @@ def get_no_at_username(username):
 
     """
     if username[0] == "@":
-        return username[1:]
+        return username[1:].lower()
     else:
-        return username
+        return username.lower()
 
 
 def get_reg_user(user, chat):
@@ -813,20 +813,20 @@ def customize_channel(update, context):
         context (telegram.ext.CallbackContext)
     """
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
-    username = get_at_username(update.message.text)
+    atusername = get_at_username(update.message.text)
     try:
-        if username in registered_channels:
-            admin_status = is_admin(bot.get_chat(username), update.effective_user.id)
+        if atusername in registered_channels:
+            admin_status = is_admin(bot.get_chat(atusername), update.effective_user.id)
             if admin_status[0]:
                 go_to_customization(update, context)
-                reg_user.context_data['channel'] = username
+                reg_user.context_data['channel'] = atusername
             else:
                 update.message.reply_text(admin_status[1])
         else:
-            update.message.reply_text("El canal " + username + " no está registrado 😗")
+            update.message.reply_text("El canal " + atusername + " no está registrado 😗")
             go_to_base(update, context)
     except TelegramError:
-        update.message.reply_text("El canal " + username + " no se encontró")
+        update.message.reply_text("El canal " + atusername + " no se encontró")
         go_to_base(update, context)
 
 
@@ -1604,6 +1604,8 @@ def is_admin(from_chat, user_id) -> tuple[bool, str]:
             if bot_member is not None:
                 if bot_member not in administrators:
                     return False, "El bot no es administrador del canal"
+                elif not bot_member.can_post_messages:
+                    return False, "El bot no tiene permiso de publicar mensajes en el canal"
             else:
                 return False, "El bot no pertenece al canal"
             member = from_chat.get_member(user_id)
@@ -1880,6 +1882,21 @@ def error(update, context):
     logger.warning('Update "%s" caused error "%s"', update, context.error)
 
 
+def fix(update, context):
+    """
+
+    Args:
+        update (telegram.Update)
+        context (telegram.ext.CallbackContext)
+
+    """
+    if update.effective_user.id == admin_chat_id:
+        for ch in registered_channels:
+            if not ch.islower():
+                registered_channels[ch.lower()] = registered_channels[ch]
+                registered_channels.pop(ch)
+
+
 def main():
     """Start the bot."""
     # Create the Updater and pass it your bot's token.
@@ -1899,6 +1916,7 @@ def main():
     dp.add_handler(CommandHandler("broadcast", broadcast))
     dp.add_handler(CommandHandler("getchatid", get_chat_id))
     dp.add_handler(CommandHandler("stats", stats))
+    dp.add_handler(CommandHandler("fix", fix))
 
     dp.add_handler(MessageHandler(Filters.text & Filters.chat_type.private, process_private_message))
     dp.add_handler(MessageHandler(Filters.photo & Filters.chat_type.private, process_private_photo))
