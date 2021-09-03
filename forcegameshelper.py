@@ -1891,10 +1891,14 @@ def fix(update, context):
 
     """
     if update.effective_user.id == admin_chat_id:
+        tofix = []
         for ch in registered_channels:
             if not ch.islower():
-                registered_channels[ch.lower()] = registered_channels[ch]
-                registered_channels.pop(ch)
+                tofix.append(ch)
+        for ch in tofix:
+            registered_channels[ch.lower()] = registered_channels[ch]
+            registered_channels.pop(ch)
+        update.message.reply_text("Fixed!")
 
 
 def main():
