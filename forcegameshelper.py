@@ -550,14 +550,7 @@ def auto_restore():
         deserialize_bot_data(t_file.download())
 
 
-def get_list_text(lst, highlight: Optional[int] = -1):
-    """
-    Args:
-        lst (list of str)
-        highlight
-    Returns:
-        str: Formatted list.
-    """
+def get_list_text(lst: list[str], highlight: Optional[int] = -1):
     if not lst:
         return ""
     return "\n".join(["{}{}{}-{}{}".format(
@@ -1303,8 +1296,12 @@ def request_remove_category_identifier(update: telegram.Update, context: telegra
 
 def see_category_identifiers(update: telegram.Update, context: telegram.ext.CallbackContext):
     reg_user, reg_channel, _ = get_update_data(update, nomarkup=True)
+    category = reg_channel.categories[reg_user.context_data['category']]
 
-    update.message.reply_text(get_list_text(reg_channel.categories[reg_user.context_data['category']].identifiers))
+    if category.identifiers:
+        update.message.reply_text(get_list_text(category.identifiers))
+    else:
+        update.message.reply_text("No ha añadido ningun identificador a esta categoría")
 
 
 def request_change_category_format(update: telegram.Update, context: telegram.ext.CallbackContext):
@@ -1395,7 +1392,11 @@ def add_template_content(update: telegram.Update, context: telegram.ext.Callback
 
 def see_template_content(update: telegram.Update, context: telegram.ext.CallbackContext):
     _, reg_channel, _ = get_update_data(update, nomarkup=True)
-    update.message.reply_text(get_list_text(reg_channel.custom_content))
+
+    if reg_channel.custom_content:
+        update.message.reply_text(get_list_text(reg_channel.custom_content))
+    else:
+        update.message.reply_text("No ha añadido ningun Contenido Personalizado")
 
 
 def delete_template_format(update: telegram.Update, context: telegram.ext.CallbackContext):
@@ -1669,7 +1670,11 @@ def request_add_template_identifier(update: telegram.Update, context: telegram.e
 
 def see_template_identifiers(update: telegram.Update, context: telegram.ext.CallbackContext):
     reg_user, reg_channel, _ = get_update_data(update, nomarkup=True)
-    update.message.reply_text(get_list_text(reg_channel.identifiers))
+
+    if reg_channel.identifiers:
+        update.message.reply_text(get_list_text(reg_channel.identifiers))
+    else:
+        update.message.reply_text("No ha añadido ningún identificador a este canal")
 
 
 def request_remove_template_identifier(update: telegram.Update, context: telegram.ext.CallbackContext):
