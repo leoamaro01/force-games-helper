@@ -12,19 +12,19 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 from telegram import ReplyKeyboardMarkup, Bot, TelegramError, ReplyKeyboardRemove, \
     InlineKeyboardButton, InlineKeyboardMarkup, ReplyMarkup
 
-__CHANNEL_VERSION = "1.0"
-__USER_VERSION = "1.0"
-__CATEGORY_VERSION = "1.0"
-__MESSAGE_VERSION = "1.0"
+CHANNEL_VERSION = "1.0"
+USER_VERSION = "1.0"
+CATEGORY_VERSION = "1.0"
+MESSAGE_VERSION = "1.0"
 
 
 class BotDataEncoder(json.JSONEncoder):
     def default(self, obj):
-        global __CHANNEL_VERSION, __USER_VERSION, __CATEGORY_VERSION, __MESSAGE_VERSION
+        global CHANNEL_VERSION, USER_VERSION, CATEGORY_VERSION, MESSAGE_VERSION
         if isinstance(obj, RegisteredChannel):
             return {
                 '__reg_channel__': True,
-                '__version__': __CHANNEL_VERSION,
+                '__version__': CHANNEL_VERSION,
                 'chat_id': obj.chat_id,
                 'template': obj.template,
                 'template_picture': obj.template_picture,
@@ -44,7 +44,7 @@ class BotDataEncoder(json.JSONEncoder):
         elif isinstance(obj, RegisteredUser):
             return {
                 '__reg_user__': True,
-                '__version__': __USER_VERSION,
+                '__version__': USER_VERSION,
                 'chat_id': obj.chat_id,
                 'status': obj.status,
                 'context_data': obj.context_data,
@@ -53,7 +53,7 @@ class BotDataEncoder(json.JSONEncoder):
         elif isinstance(obj, SavedMessage):
             return {
                 '__saved_message__': True,
-                '__version__': __MESSAGE_VERSION,
+                '__version__': MESSAGE_VERSION,
                 'text': obj.text,
                 'id': obj.message_id,
                 'cat': obj.category,
@@ -63,7 +63,7 @@ class BotDataEncoder(json.JSONEncoder):
         elif isinstance(obj, Category):
             return {
                 '__category__': True,
-                '__version__': __CATEGORY_VERSION,
+                '__version__': CATEGORY_VERSION,
                 'name': obj.name,
                 'identifiers': obj.identifiers,
                 'category_content': obj.category_content,
@@ -73,9 +73,9 @@ class BotDataEncoder(json.JSONEncoder):
 
 
 def decode_bot_data(dct: dict):
-    global __CHANNEL_VERSION, __USER_VERSION, __CATEGORY_VERSION, __MESSAGE_VERSION
+    global CHANNEL_VERSION, USER_VERSION, CATEGORY_VERSION, MESSAGE_VERSION
     if '__reg_channel__' in dct:
-        if "__version__" not in dct or dct['__version__'] != __CHANNEL_VERSION:
+        if "__version__" not in dct or dct['__version__'] != CHANNEL_VERSION:
             return decode_legacy_data(dct)
         else:
             return RegisteredChannel(chat_id=dct['chat_id'],
@@ -94,7 +94,7 @@ def decode_bot_data(dct: dict):
                                      custom_content=dct['custom_content'],
                                      send_automatically=dct['send_automatically'])
     elif '__reg_user__' in dct:
-        if "__version__" not in dct or dct['__version__'] != __USER_VERSION:
+        if "__version__" not in dct or dct['__version__'] != USER_VERSION:
             return decode_legacy_data(dct)
         else:
             return RegisteredUser(chat_id=dct['chat_id'],
@@ -102,7 +102,7 @@ def decode_bot_data(dct: dict):
                                   context_data=dct['context_data'],
                                   known_channels=dct['known_channels'])
     elif '__saved_message__' in dct:
-        if "__version__" not in dct or dct['__version__'] != __MESSAGE_VERSION:
+        if "__version__" not in dct or dct['__version__'] != MESSAGE_VERSION:
             return decode_legacy_data(dct)
         else:
             return SavedMessage(message_id=dct['id'],
@@ -111,7 +111,7 @@ def decode_bot_data(dct: dict):
                                 custom_content=dct['custom_content'],
                                 message_time=datetime.fromisoformat(dct['message_time']))
     elif '__category__' in dct:
-        if "__version__" not in dct or dct['__version__'] != __MESSAGE_VERSION:
+        if "__version__" not in dct or dct['__version__'] != MESSAGE_VERSION:
             return decode_legacy_data(dct)
         else:
             return Category(name=dct['name'],
@@ -1044,7 +1044,7 @@ def is_admin(from_chat: telegram.chat, user_id: int) -> tuple[bool, str]:
                 if member in administrators:
                     return True, ""
                 else:
-                    return False, "No eres administrador de ese canal :/ eres tonto o primo de JAVIER?"
+                    return False, "No eres administrador de ese canal :/ eres tonto o primo de Javier?"
             else:
                 return False, "No perteneces a ese canal"
         except TelegramError:
@@ -1130,33 +1130,21 @@ def get_message_link(chat_username, message_id):
     return "t.me/{}/{}".format(get_no_at_username(chat_username), message_id)
 
 
-def get_at_username(username):
-    """
+def get_at_username(username: str):
+    if not username:
+        return ""
 
-    Args:
-        username (str)
-
-    Returns:
-        str: Returns username with @
-
-    """
-    if not username.startswith("@"):
+    if not username[0] == "@":
         return username.lower()
     else:
         return "@" + username.lower()
 
 
 def get_no_at_username(username):
-    """
+    if not username:
+        return ""
 
-    Args:
-        username (str)
-
-    Returns:
-        str: Returns username without @
-
-    """
-    if username.startswith("@"):
+    if username[0] == "@":
         return username[1:].lower()
     else:
         return username.lower()
@@ -1981,6 +1969,7 @@ def register_channel(update: telegram.Update, context: telegram.ext.CallbackCont
         go_to_base(update, context)
         return
     try:
+        logger.info(atusername)
         channel = bot.get_chat(atusername)
     except TelegramError:
         update.message.reply_text(
@@ -2043,13 +2032,14 @@ def backup(update: telegram.Update, context: telegram.ext.CallbackContext):
 
 def restore(update: telegram.Update, context: telegram.ext.CallbackContext):
     original = update.message.reply_to_message
-    if original is not None and original.document is not None:
-        t_file = original.document.get_file()
-        deserialize_bot_data(t_file.download())
-        update.message.reply_text("Restored previous data!")
-        update_checker[0] = datetime.now()
-    else:
-        update.message.reply_text("El comando /restore debe ser una respuesta a un archivo de respaldo.")
+    if update.effective_user.id == admin_chat_id:
+        if original is not None and original.document is not None:
+            t_file = original.document.get_file()
+            deserialize_bot_data(t_file.download())
+            update.message.reply_text("Restored previous data!")
+            update_checker[0] = datetime.now()
+        else:
+            update.message.reply_text("El comando /restore debe ser una respuesta a un archivo de respaldo.")
 
 
 def process_private_message(update: telegram.Update, context: telegram.ext.CallbackContext):
