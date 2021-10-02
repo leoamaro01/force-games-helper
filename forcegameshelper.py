@@ -1892,7 +1892,7 @@ def change_template(update: telegram.Update, context: telegram.ext.CallbackConte
     elif len(new_template) > WARNING_TEMPLATE_LENGTH:
         update.message.reply_text(f"⚠️ Esa plantilla excede el número de caracteres recomendados ({WARNING_TEMPLATE_LENGTH}), es posible que no se publique correctamente si el canal recibe demasiado contenido")
 
-    pattern = r"\$pattern\d?\$"
+    pattern = r"\$plantilla\d*\$"
     if not re.search(pattern, new_template):
         update.message.reply_text("Esa plantilla no contiene ninguna de las etiquetas $plantilla$ o $plantilla#$, debe contener una de las dos.")
         return
