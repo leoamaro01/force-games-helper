@@ -2203,88 +2203,105 @@ def process_private_message(update: telegram.Update, context: telegram.ext.Callb
             change_summary_time(update, context)
     elif status == "requested_add_category":
         if text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
             go_to_categories(update, context)
         else:
             add_category(update, context)
     elif status == "requested_template_identifier":
         if text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
             go_to_template(update, context)
         else:
             add_template_identifier(update, context)
     elif status == "requested_remove_template_identifier":
         if text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
             go_to_template(update, context)
         else:
             remove_template_identifier(update, context)
     elif status == "requested_template_content":
         if text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
             go_to_template(update, context)
         else:
             add_template_content(update, context)
     elif status == "requested_remove_template_content":
         if text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
             go_to_template(update, context)
         else:
             remove_template_content(update, context)
     elif status == "requested_reorder_template_contents":
         if text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
             go_to_template(update, context)
         else:
             reorder_list(update, context, "reordering_template_content", reg_channel.custom_content)
     elif status == "requested_category_name":
         if text == CANCEL_MARKUP:
-            go_to_categories(update, context)
+            update.message.reply_text("Cancelado")
+            go_to_category_customization(update, context)
         else:
             change_category_name(update, context)
     elif status == "requested_category_identifier":
         if text == CANCEL_MARKUP:
-            go_to_categories(update, context)
+            update.message.reply_text("Cancelado")
+            go_to_category_customization(update, context)
         else:
             add_category_identifier(update, context)
     elif status == "requested_remove_category_identifier":
         if text == CANCEL_MARKUP:
-            go_to_categories(update, context)
+            update.message.reply_text("Cancelado")
+            go_to_category_customization(update, context)
         else:
             remove_category_identifier(update, context)
     elif status == "requested_category_format":
         if text == CANCEL_MARKUP:
-            go_to_categories(update, context)
+            update.message.reply_text("Cancelado")
+            go_to_category_customization(update, context)
         else:
             change_category_format(update, context)
     elif status == "requested_category_content":
         if text == CANCEL_MARKUP:
-            go_to_categories(update, context)
+            update.message.reply_text("Cancelado")
+            go_to_category_customization(update, context)
         else:
             add_category_content(update, context)
     elif status == "requested_remove_category_content":
         if text == CANCEL_MARKUP:
-            go_to_categories(update, context)
+            update.message.reply_text("Cancelado")
+            go_to_category_customization(update, context)
         else:
             remove_category_content(update, context)
     elif status == "requested_reorder_category_contents":
         if text == CANCEL_MARKUP:
-            go_to_categories(update, context)
+            update.message.reply_text("Cancelado")
+            go_to_category_customization(update, context)
         else:
             reorder_list(update, context, "reordering_category_contents",
                          reg_channel.categories[reg_user.context_data['category']].category_content)
     elif status == "requested_remove_category":
         if text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
             go_to_categories(update, context)
         else:
             remove_category(update, context)
     elif status == "requested_reorder_categories":
         if text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
             go_to_categories(update, context)
         else:
             reorder_list(update, context, "reordering_categories",
                          [c.name for c in reg_channel.categories])
     elif status == "requested_template_format":
         if text == CANCEL_MARKUP:
-            go_to_customization(update, context)
+            update.message.reply_text("Cancelado")
+            go_to_template(update, context)
         else:
             change_template_format(update, context)
     elif status == "requested_customize_category":
         if text == CANCEL_MARKUP:
+            update.message.reply_text("Cancelado")
             go_to_categories(update, context)
         else:
             customize_category(update, context)
