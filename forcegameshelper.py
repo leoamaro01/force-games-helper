@@ -1134,7 +1134,7 @@ def get_at_username(username: str):
     if not username:
         return ""
 
-    if not username[0] == "@":
+    if username.startswith("@"):
         return username.lower()
     else:
         return "@" + username.lower()
@@ -1144,7 +1144,7 @@ def get_no_at_username(username):
     if not username:
         return ""
 
-    if username[0] == "@":
+    if username.startswith("@"):
         return username[1:].lower()
     else:
         return username.lower()
