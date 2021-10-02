@@ -753,6 +753,7 @@ def get_markup(status, **kwargs) -> ReplyMarkup:
                 [CHANGE_TEMPLATE_FORMAT_MARKUP, SEE_TEMPLATE_FORMAT_MARKUP, DELETE_TEMPLATE_FORMAT_MARKUP],
                 [ADD_TEMPLATE_CONTENT_MARKUP, SEE_TEMPLATE_CONTENT_MARKUP, REMOVE_TEMPLATE_CONTENT_MARKUP],
                 [CAN_PIN_TEMPLATES_ON_MARKUP if kwargs['reg_channel'].pin_summaries else CAN_PIN_TEMPLATES_OFF_MARKUP],
+                [REORDER_TEMPLATE_CONTENT_MARKUP]
                 [HELP_MARKUP],
                 [CANCEL_MARKUP],
             ], resize_keyboard=True)
