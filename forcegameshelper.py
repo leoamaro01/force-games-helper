@@ -1335,7 +1335,7 @@ def switch_pin_summaries(update: telegram.Update, context: telegram.ext.Callback
 
     update.message.reply_text("Ahora se anclarán los resúmenes al canal 📌" if reg_channel.pin_summaries
                               else "Ya no se anclarán los resúmenes al canal")
-    go_to_customization(update, context)
+    go_to_template(update, context)
 
 
 def switch_send_automatically(update: telegram.Update, context: telegram.ext.CallbackContext):
@@ -1358,7 +1358,7 @@ def change_template_format(update: telegram.Update, context: telegram.ext.Callba
     if "$titulo$" in update.message.text:
         reg_channel.template_format = update.message.text
         update.message.reply_text("Formato cambiado! :D")
-        go_to_customization(update, context)
+        go_to_template(update, context)
     else:
         update.message.reply_text("El formato debe contener la etiqueta $titulo$ >:/")
 
@@ -1899,7 +1899,7 @@ def change_template(update: telegram.Update, context: telegram.ext.CallbackConte
 
     reg_channel.template = new_template
     update.message.reply_text("Plantilla cambiada! 😎")
-    go_to_customization(update, context)
+    go_to_template(update, context)
 
 
 def see_template(update: telegram.Update, context: telegram.ext.CallbackContext):
@@ -1920,7 +1920,7 @@ def change_template_picture(update: telegram.Update, context: telegram.ext.Callb
 
     reg_channel.template_picture = update.message.photo[-1].file_id
     update.message.reply_text("Foto establecida! :3")
-    go_to_customization(update, context)
+    go_to_template(update, context)
 
 
 def see_template_picture(update: telegram.Update, context: telegram.ext.CallbackContext):
@@ -2176,13 +2176,13 @@ def process_private_message(update: telegram.Update, context: telegram.ext.Callb
     elif status == "requested_template":
         if text == CANCEL_MARKUP:
             update.message.reply_text("Cancelado")
-            go_to_customization(update, context)
+            go_to_template(update, context)
         else:
             change_template(update, context)
     elif status == "requested_template_picture":
         if text == CANCEL_MARKUP:
             update.message.reply_text("Cancelado")
-            go_to_customization(update, context)
+            go_to_template(update, context)
     elif status == "requested_register":
         if text == CANCEL_MARKUP:
             update.message.reply_text("Cancelado")
