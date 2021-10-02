@@ -243,6 +243,7 @@ class RegisteredUser:
 
 
 PORT = int(os.environ.get('PORT', 8443))
+WEBHOOK = os.environ.get("WEBHOOK")
 BOT_CLOUD = os.environ.get('BOT_CLOUD')
 
 # Enable logging
@@ -438,11 +439,6 @@ update_checker: list[datetime] = []
 
 
 def start(update: telegram.Update, context: telegram.ext.CallbackContext):
-    """
-    Args:
-        update (telegram.Update)
-        context (telegram.ext.CallbackContext)
-    """
     user = update.effective_user
     get_reg_user(user, update.effective_chat)
     if len(context.args) >= 2 and context.args[0] == "admin" and context.args[1] == TOKEN:
@@ -2428,7 +2424,7 @@ def main():
     updater.start_webhook(listen="0.0.0.0",
                           port=int(PORT),
                           url_path=TOKEN,
-                          webhook_url='https://forcegameshelper.herokuapp.com/' + TOKEN)
+                          webhook_url=WEBHOOK + TOKEN)
 
     updater.idle()
 
