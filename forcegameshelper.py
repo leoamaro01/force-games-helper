@@ -73,6 +73,7 @@ class BotDataEncoder(json.JSONEncoder):
 
 
 def decode_bot_data(dct: dict):
+    global __CHANNEL_VERSION, __USER_VERSION, __CATEGORY_VERSION, __MESSAGE_VERSION
     if '__reg_channel__' in dct:
         if "__version__" not in dct or dct['__version__'] != __CHANNEL_VERSION:
             return decode_legacy_data(dct)
