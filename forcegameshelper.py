@@ -1343,7 +1343,7 @@ def switch_send_automatically(update: telegram.Update, context: telegram.ext.Cal
 
     reg_channel.send_automatically = not reg_channel.send_automatically
 
-    update.message.reply_text("Ahora se enviarán automáticamente los resúmenes al canal 🔁" if reg_channel.pin_summaries
+    update.message.reply_text("Ahora se enviarán automáticamente los resúmenes al canal 🔁" if reg_channel.send_automatically
                               else "Ya no se enviarán automáticamente los resúmenes al canal")
     go_to_customization(update, context)
 
