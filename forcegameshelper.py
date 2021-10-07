@@ -1284,7 +1284,13 @@ def find_problems(update: telegram.Update, context: telegram.ext.CallbackContext
 
 
 def request_remove_template_content(update: telegram.Update, context: telegram.ext.CallbackContext):
-    send_request(update, "Cuál es el número del contenido que quiere eliminar?", "requested_remove_template_content")
+    reg_user, reg_channel, markup = get_update_data(update, "requested_remove_template_content")
+
+    if reg_channel.template_contents:
+        send_request(update, "Cuál es el número del contenido que quiere eliminar?",
+                     "requested_remove_template_content", reg_user=reg_user, markup=markup)
+    else:
+        update.message.reply_text("No ha añadido ningun Contenido Personalizado.")
 
 
 def request_customize_category(update: telegram.Update, context: telegram.ext.CallbackContext):
@@ -1300,7 +1306,14 @@ def request_add_category_identifier(update: telegram.Update, context: telegram.e
 
 
 def request_remove_category_identifier(update: telegram.Update, context: telegram.ext.CallbackContext):
-    send_request(update, "Cuál es el número del identificador de categoría que desea eliminar?", "requested_remove_category_identifier")
+    reg_user, reg_channel, markup = get_update_data(update, "requested_remove_category_identifier")
+    category = reg_channel.categories[reg_user.context_data['category']]
+
+    if category.identifiers:
+        send_request(update, "Cuál es el número del identificador de categoría que desea eliminar?",
+                     "requested_remove_category_identifier", reg_user=reg_user, markup=markup)
+    else:
+        update.message.reply_text("No ha añadido ningun identificador a esta categoría")
 
 
 def see_category_identifiers(update: telegram.Update, context: telegram.ext.CallbackContext):
@@ -1687,7 +1700,13 @@ def see_template_identifiers(update: telegram.Update, context: telegram.ext.Call
 
 
 def request_remove_template_identifier(update: telegram.Update, context: telegram.ext.CallbackContext):
-    send_request(update, "Cuál es el número del identificador que desea eliminar?", "requested_remove_template_identifier")
+    reg_user, reg_channel, markup = get_update_data(update, "requested_remove_tempalte_identifier")
+    if reg_channel.identifiers:
+        send_request(update, "Cuál es el número del identificador que desea eliminar?", "requested_remove_template_identifier",
+                     reg_user=reg_user, markup=markup)
+    else:
+        update.message.reply_text("No ha añadido ningún identificador a esta plantilla")
+        go_to_template(update, context)
 
 
 def reorder_list(update: telegram.Update, context: telegram.ext.CallbackContext, status: str, name_list: list[str]):
