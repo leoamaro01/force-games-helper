@@ -1407,7 +1407,7 @@ def add_template_content(update: telegram.Update, context: telegram.ext.Callback
     reg_channel.template_contents.append(text)
 
     update.message.reply_text(f"Contenido {text} añadido, para utilizarlo "
-                              f"$contenido{len(reg_channel.template_contents) - 1}$"
+                              f"$contenido{len(reg_channel.template_contents) - 1}$ "
                               f"debe estar presente en el formato de plantilla")
     go_to_template(update, context)
 
