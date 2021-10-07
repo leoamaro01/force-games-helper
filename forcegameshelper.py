@@ -12,10 +12,10 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 from telegram import ReplyKeyboardMarkup, Bot, TelegramError, ReplyKeyboardRemove, \
     InlineKeyboardButton, InlineKeyboardMarkup, ReplyMarkup
 
-CHANNEL_VERSION = "1.0"
+CHANNEL_VERSION = "1.1"
 USER_VERSION = "1.0"
-CATEGORY_VERSION = "1.0"
-MESSAGE_VERSION = "1.0"
+CATEGORY_VERSION = "1.1"
+MESSAGE_VERSION = "1.1"
 
 
 class BotDataEncoder(json.JSONEncoder):
@@ -38,7 +38,7 @@ class BotDataEncoder(json.JSONEncoder):
                 'pin_summaries': obj.pin_summaries,
                 'template_format': obj.template_format,
                 'identifiers': obj.identifiers,
-                'contents': obj.custom_content,
+                'template_contents': obj.template_contents,
                 'send_automatically': obj.send_automatically
             }
         elif isinstance(obj, RegisteredUser):
@@ -58,7 +58,7 @@ class BotDataEncoder(json.JSONEncoder):
                 'id': obj.message_id,
                 'cat': obj.category,
                 'message_time': obj.message_time.isoformat(),
-                'custom_content': obj.custom_content
+                'custom_contents': obj.custom_contents
             }
         elif isinstance(obj, Category):
             return {
@@ -66,7 +66,7 @@ class BotDataEncoder(json.JSONEncoder):
                 '__version__': CATEGORY_VERSION,
                 'name': obj.name,
                 'identifiers': obj.identifiers,
-                'category_content': obj.category_content,
+                'category_contents': obj.category_contents,
                 'template_format': obj.template_format
             }
         return json.JSONEncoder.default(self, obj)
@@ -91,7 +91,7 @@ def decode_bot_data(dct: dict):
                                      pin_summaries=dct['pin_summaries'],
                                      template_format=dct['template_format'],
                                      identifiers=dct['identifiers'],
-                                     custom_content=dct['custom_content'],
+                                     template_contents=dct['template_contents'],
                                      send_automatically=dct['send_automatically'])
     elif '__reg_user__' in dct:
         if "__version__" not in dct or dct['__version__'] != USER_VERSION:
@@ -108,7 +108,7 @@ def decode_bot_data(dct: dict):
             return SavedMessage(message_id=dct['id'],
                                 text=dct['text'],
                                 category=dct['cat'],
-                                custom_content=dct['custom_content'],
+                                custom_contents=dct['custom_contents'],
                                 message_time=datetime.fromisoformat(dct['message_time']))
     elif '__category__' in dct:
         if "__version__" not in dct or dct['__version__'] != MESSAGE_VERSION:
@@ -116,56 +116,91 @@ def decode_bot_data(dct: dict):
         else:
             return Category(name=dct['name'],
                             identifiers=dct['identifiers'],
-                            category_content=dct['category_content'],
+                            category_contents=dct['category_contents'],
                             template_format=dct['template_format'])
     return dct
 
 
 # TODO
 def decode_legacy_data(dct: dict):
-    return
+    global CHANNEL_VERSION, USER_VERSION, CATEGORY_VERSION, MESSAGE_VERSION
+    if '__reg_channel__' in dct:
+        if "__version__" not in dct:
+            return None  # TODO
+        elif dct['__version__'] == "1.0":
+            return RegisteredChannel(chat_id=dct['chat_id'],
+                                     template=dct['template'],
+                                     template_picture=dct['template_picture'],
+                                     template_time_dif=dct['template_time_dif'],
+                                     saved_messages=dct['saved_messages'],
+                                     last_saved_messages=dct['last_saved_messages'],
+                                     last_summary_message_id=dct['last_summary_message_id'],
+                                     categories=dct['categories'],
+                                     last_summary_time=datetime.fromisoformat(dct['last_summary_time']),
+                                     last_summary_message_text=dct['last_summary_message_text'],
+                                     pin_summaries=dct['pin_summaries'],
+                                     template_format=dct['template_format'],
+                                     identifiers=dct['identifiers'],
+                                     template_contents=dct['contents'],
+                                     send_automatically=dct['send_automatically'])
+    elif '__reg_user__' in dct:
+        if "__version__" not in dct:
+            return None  # TODO
+        elif dct['__version__'] == "1.0":
+            return None  # Yet unused
+    elif '__saved_message__' in dct:
+        if "__version__" not in dct:
+            return None  # TODO
+        elif dct['__version__'] == "1.0":
+            return SavedMessage(message_id=dct['id'],
+                                text=dct['text'],
+                                category=dct['cat'],
+                                custom_contents=dct['custom_content'],
+                                message_time=datetime.fromisoformat(dct['message_time']))
+    elif '__category__' in dct:
+        if "__version__" not in dct:
+            return None  # TODO
+        elif dct['__version__'] == "1.0":
+            return Category(name=dct['name'],
+                            identifiers=dct['identifiers'],
+                            category_contents=dct['category_content'],
+                            template_format=dct['template_format'])
+    return dct
 
 
 class SavedMessage:
-    def __init__(self, message_id, text, message_time, custom_content: Optional[list[str]],
-                 category: Optional[str] = ""):
-        """
-        Args:
-            message_id (int)
-            text (str)
-            message_time (datetime)
-            custom_content (list of str)
-        """
+    def __init__(self, message_id: int, text: str, message_time: datetime,
+                 custom_contents: Optional[list[str]], category: Optional[str] = ""):
         self.message_id = message_id
         self.text = text
         self.category = category
         self.message_time = message_time
-        self.custom_content = custom_content
+        self.custom_contents = custom_contents
+
+
+class Category:
+    def __init__(self, name: str = "", identifiers: str = None,
+                 category_contents: list[str] = None, template_format: str = ""):
+        self.name = name
+        self.template_format = template_format
+        if identifiers is not None:
+            self.identifiers = identifiers
+        else:
+            self.identifiers = []
+        if category_contents is not None:
+            self.category_contents = category_contents
+        else:
+            self.category_contents = []
 
 
 class RegisteredChannel:
-    def __init__(self, chat_id=0, template="", template_picture="", template_time_dif=24, saved_messages=None,
-                 last_saved_messages=None, last_summary_message_id=-1, categories=None, last_summary_time=None,
-                 last_summary_message_text="", pin_summaries=True, template_format="", custom_content=None,
-                 identifiers=None, send_automatically=True):
-        """
-        Args:
-            chat_id (int)
-            template (str)
-            template_picture (str)
-            template_time_dif (int)
-            saved_messages (list of SavedMessage)
-            last_saved_messages (list of SavedMessage)
-            last_summary_message_id (int)
-            categories (list of Category)
-            last_summary_time (datetime)
-            last_summary_message_text (str)
-            pin_summaries (bool)
-            template_format (str)
-            custom_content (list of str)
-            identifiers (list of str)
-            send_automatically (bool)
-        """
+    def __init__(self, chat_id: int = 0, template: str = "", template_picture: str = "",
+                 template_time_dif: int = 24, saved_messages: list[SavedMessage] = None,
+                 last_saved_messages: list[SavedMessage] = None, last_summary_message_id: int = -1,
+                 categories: list[Category] = None, last_summary_time: datetime = None,
+                 last_summary_message_text: str = "", pin_summaries: bool = True,
+                 template_format: str = "", template_contents: list[str] = None,
+                 identifiers: list[str] = None, send_automatically: bool = True):
         self.chat_id = chat_id
         self.template = template
         self.template_picture = template_picture
@@ -179,10 +214,10 @@ class RegisteredChannel:
             self.identifiers = identifiers
         else:
             self.identifiers: list[str] = []
-        if custom_content is not None:
-            self.custom_content = custom_content
+        if template_contents is not None:
+            self.template_contents = template_contents
         else:
-            self.custom_content: list[str] = []
+            self.template_contents: list[str] = []
         if saved_messages is not None:
             self.saved_messages = saved_messages
         else:
@@ -201,36 +236,9 @@ class RegisteredChannel:
             self.categories: list[Category] = []
 
 
-class Category:
-    def __init__(self, name="", identifiers=None, category_content=None, template_format=""):
-        """
-        Args:
-            name (str)
-            template_format (str)
-            identifiers (list of str)
-            category_content (list of str)
-        """
-        self.name = name
-        self.template_format = template_format
-        if identifiers is not None:
-            self.identifiers = identifiers
-        else:
-            self.identifiers = []
-        if category_content is not None:
-            self.category_content = category_content
-        else:
-            self.category_content = []
-
-
 class RegisteredUser:
-    def __init__(self, chat_id=0, status="", context_data=None, known_channels=None):
-        """
-        Args:
-            chat_id (int)
-            status (str)
-            context_data (dict[str, str])
-            known_channels (list of str)
-        """
+    def __init__(self, chat_id: int = 0, status: str = "", context_data: list = None,
+                 known_channels: list[str] = None):
         self.chat_id = chat_id
         self.status = status
         if context_data is not None:
@@ -817,14 +825,14 @@ def get_message_data(username, message) -> tuple[str, Optional[Category], list[s
                     break
         if category and title:
             cat = get_cat_from_alias(category, reg_channel.categories)
-            if cat.category_content:
+            if cat.category_contents:
                 for line in split:
-                    content = elements_in_text(line, cat.category_content)
+                    content = elements_in_text(line, cat.category_contents)
                     if content:
                         custom_content.append(line)
-            elif reg_channel.custom_content:
+            elif reg_channel.template_contents:
                 for line in split:
-                    content = elements_in_text(line, reg_channel.custom_content)
+                    content = elements_in_text(line, reg_channel.template_contents)
                     if content:
                         custom_content.append(line)
     else:
@@ -923,22 +931,22 @@ def get_template_string(username, messages):
                                 "$titulo$", "[{}]({})".format(
                                     escape_for_telegram(m.text.replace(m.category, "").strip()),
                                     get_message_link(username, m.message_id)))
-                            if cat.category_content:
-                                for i in range(len(cat.category_content)):
+                            if cat.category_contents:
+                                for i in range(len(cat.category_contents)):
                                     if "$contenido{}$".format(i) in template_format:
-                                        for content in m.custom_content:
-                                            if cat.category_content[i] in content:
+                                        for content in m.custom_contents:
+                                            if cat.category_contents[i] in content:
                                                 message = message.replace("$contenido{}$".format(i),
                                                                           content.replace(
-                                                                              cat.category_content[i], ""))
+                                                                              cat.category_contents[i], ""))
                                                 break
-                            elif reg_channel.custom_content:
-                                for i in range(len(reg_channel.custom_content)):
+                            elif reg_channel.template_contents:
+                                for i in range(len(reg_channel.template_contents)):
                                     if "$contenido{}$".format(i) in template_format:
-                                        for content in m.custom_content:
-                                            if reg_channel.custom_content[i] in content:
+                                        for content in m.custom_contents:
+                                            if reg_channel.template_contents[i] in content:
                                                 message = message.replace("$contenido{}$".format(i),
-                                                                          content.replace(reg_channel.custom_content[i],
+                                                                          content.replace(reg_channel.template_contents[i],
                                                                                           ""))
                                                 break
                             cat_messages.append(message)
@@ -949,10 +957,10 @@ def get_template_string(username, messages):
                             message = "\\- [{}]({})".format(
                                 escape_for_telegram(m.text.replace(m.category, "").strip()),
                                 get_message_link(atusername, m.message_id))
-                            for i in range(len(cat.category_content)):
-                                for content in m.custom_content:
-                                    if cat.category_content[i] in content:
-                                        message += " " + content.replace(cat.category_content[i], "")
+                            for i in range(len(cat.category_contents)):
+                                for content in m.custom_contents:
+                                    if cat.category_contents[i] in content:
+                                        message += " " + content.replace(cat.category_contents[i], "")
                                         break
                             cat_messages.append(message)
                 else:
@@ -964,22 +972,22 @@ def get_template_string(username, messages):
                                 "$titulo$", "[{}]({})".format(
                                     escape_for_telegram(m.text.replace(m.category, "").strip()),
                                     get_message_link(username, m.message_id)))
-                            if cat.category_content:
-                                for i in range(len(cat.category_content)):
+                            if cat.category_contents:
+                                for i in range(len(cat.category_contents)):
                                     if "$contenido{}$".format(i) in template_format:
-                                        for content in m.custom_content:
-                                            if cat.category_content[i] in content:
+                                        for content in m.custom_contents:
+                                            if cat.category_contents[i] in content:
                                                 message = message.replace("$contenido{}$".format(i),
                                                                           content.replace(
-                                                                              cat.category_content[i], ""))
+                                                                              cat.category_contents[i], ""))
                                                 break
-                            elif reg_channel.custom_content:
-                                for i in range(len(reg_channel.custom_content)):
+                            elif reg_channel.template_contents:
+                                for i in range(len(reg_channel.template_contents)):
                                     if "$contenido{}$".format(i) in template_format:
-                                        for content in m.custom_content:
-                                            if reg_channel.custom_content[i] in content:
+                                        for content in m.custom_contents:
+                                            if reg_channel.template_contents[i] in content:
                                                 message = message.replace("$contenido{}$".format(i),
-                                                                          content.replace(reg_channel.custom_content[i],
+                                                                          content.replace(reg_channel.template_contents[i],
                                                                                           ""))
                                                 break
                             cat_messages.append(message)
@@ -1317,7 +1325,7 @@ def see_category_format(update: telegram.Update, context: telegram.ext.CallbackC
 def request_reorder_template_content(update: telegram.Update, context: telegram.ext.CallbackContext):
     reg_user, reg_channel, markup = get_update_data(update, "template")
 
-    if len(reg_channel.custom_content) <= 1:
+    if len(reg_channel.template_contents) <= 1:
         update.message.reply_text("Solo puede reordenar contenidos luego de añadir 2 o más.")
         go_to_categories(update, context)
         return
@@ -1382,10 +1390,10 @@ def add_template_content(update: telegram.Update, context: telegram.ext.Callback
 
     reg_user, reg_channel, _ = get_update_data(update, nomarkup=True)
 
-    reg_channel.custom_content.append(text)
+    reg_channel.template_contents.append(text)
 
     update.message.reply_text(f"Contenido {text} añadido, para utilizarlo "
-                              f"$contenido{len(reg_channel.custom_content) - 1}$"
+                              f"$contenido{len(reg_channel.template_contents) - 1}$"
                               f"debe estar presente en el formato de plantilla")
     go_to_template(update, context)
 
@@ -1393,8 +1401,8 @@ def add_template_content(update: telegram.Update, context: telegram.ext.Callback
 def see_template_content(update: telegram.Update, context: telegram.ext.CallbackContext):
     _, reg_channel, _ = get_update_data(update, nomarkup=True)
 
-    if reg_channel.custom_content:
-        update.message.reply_text(get_list_text(reg_channel.custom_content))
+    if reg_channel.template_contents:
+        update.message.reply_text(get_list_text(reg_channel.template_contents))
     else:
         update.message.reply_text("No ha añadido ningun Contenido Personalizado")
 
@@ -1431,8 +1439,8 @@ def see_category_contents(update: telegram.Update, context: telegram.ext.Callbac
     reg_user, reg_channel, _ = get_update_data(update, nomarkup=True)
     category = reg_channel.categories[reg_user.context_data['category']]
 
-    if category.category_content:
-        update.message.reply_text(get_list_text(category.category_content))
+    if category.category_contents:
+        update.message.reply_text(get_list_text(category.category_contents))
     else:
         update.message.reply_text("No se ha establecido ningun contenido en esta categoría")
 
@@ -1441,7 +1449,7 @@ def request_remove_category_content(update: telegram.Update, context: telegram.e
     reg_user, reg_channel, markup = get_update_data(update, "requested_remove_category")
     category = reg_channel.categories[reg_user.context_data['category']]
 
-    if len(category.category_content) > 0:
+    if len(category.category_contents) > 0:
         send_request(update, "Cuál es el número del contenido que desea eliminar?",
                      "requested_remove_category_content", reg_user=reg_user, markup=markup)
     else:
@@ -1582,11 +1590,11 @@ def remove_category_content(update: telegram.Update, context: telegram.ext.Callb
     reg_user, reg_channel, _ = get_update_data(update, nomarkup=True)
     category = reg_channel.categories[reg_user.context_data['category']]
 
-    if index < 0 or index >= len(category.category_content):
+    if index < 0 or index >= len(category.category_contents):
         update.message.reply_text("Eso no es un número válido :/")
         return
 
-    category.category_content.pop(index)
+    category.category_contents.pop(index)
     update.message.reply_text("Contenido eliminado!")
     go_to_category_customization(update, context)
 
@@ -1600,11 +1608,11 @@ def remove_template_content(update: telegram.Update, context: telegram.ext.Callb
 
     reg_user, reg_channel, _ = get_update_data(update, nomarkup=True)
 
-    if index < 0 or index >= len(reg_channel.custom_content):
+    if index < 0 or index >= len(reg_channel.template_contents):
         update.message.reply_text("Eso no es un número válido :/")
         return
 
-    reg_channel.custom_content.pop(index)
+    reg_channel.template_contents.pop(index)
     update.message.reply_text("Contenido eliminado!")
     go_to_template(update, context)
 
@@ -1644,7 +1652,7 @@ def request_reorder_category_contents(update: telegram.Update, context: telegram
     reg_user, reg_channel, markup = get_update_data(update, "requested_reorder_category_contents")
     category = reg_channel.categories[reg_user.context_data['category']]
 
-    if len(category.category_content) <= 1:
+    if len(category.category_contents) <= 1:
         update.message.reply_text("Solo puede reordenar contenidos luego de añadir 2 o más.")
         go_to_categories(update, context)
         return
@@ -1881,7 +1889,7 @@ def add_category_content(update: telegram.Update, context: telegram.ext.Callback
     reg_user, reg_channel, _ = get_update_data(update, nomarkup=True)
     category = reg_channel.categories[reg_user.context_data['category']]
 
-    category.category_content.append(update.message.text)
+    category.category_contents.append(update.message.text)
 
     update.message.reply_text("Contenido de categoría añadido!")
     go_to_category_customization(update, context)
@@ -2242,7 +2250,7 @@ def process_private_message(update: telegram.Update, context: telegram.ext.Callb
             update.message.reply_text("Cancelado")
             go_to_template(update, context)
         else:
-            reorder_list(update, context, "reordering_template_content", reg_channel.custom_content)
+            reorder_list(update, context, "reordering_template_content", reg_channel.template_contents)
     elif status == "requested_category_name":
         if text == CANCEL_MARKUP:
             update.message.reply_text("Cancelado")
@@ -2285,7 +2293,7 @@ def process_private_message(update: telegram.Update, context: telegram.ext.Callb
             go_to_category_customization(update, context)
         else:
             reorder_list(update, context, "reordering_category_contents",
-                         reg_channel.categories[reg_user.context_data['category']].category_content)
+                         reg_channel.categories[reg_user.context_data['category']].category_contents)
     elif status == "requested_remove_category":
         if text == CANCEL_MARKUP:
             update.message.reply_text("Cancelado")
@@ -2383,10 +2391,10 @@ def process_callback_query(update: telegram.Update, context: telegram.ext.Callba
         names = [c.name for c in reg_channel.categories]
         source = reg_channel.categories
     elif reg_user.status == "reordering_template_content":
-        source = reg_channel.custom_content
+        source = reg_channel.template_contents
     elif reg_user.status == "reordering_category_contents":
         category = reg_channel.categories[reg_user.context_data['category']]
-        source = category.category_content
+        source = category.category_contents
 
     if source is not None:
         if data == MOVE_UP_MARKUP:
