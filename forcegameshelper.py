@@ -1839,7 +1839,7 @@ def reorder_down(update: telegram.Update, context: telegram.ext.CallbackContext,
         src_item = source_list[index - 1]
         source_list.pop(index - 1)
         source_list.insert(index, src_item)
-        if index == len(reg_channel.categories) - 1:
+        if index == len(name_list) - 1:
             markup = InlineKeyboardMarkup(
                 [
                     [move_up_button],
