@@ -2324,13 +2324,6 @@ def process_private_message(update: telegram.Update, context: telegram.ext.Callb
 
 
 def process_private_photo(update: telegram.Update, context: telegram.ext.CallbackContext):
-    """
-
-    Args:
-        update (telegram.Update)
-        context (telegram.ext.CallbackContext)
-
-    """
     if update.message is None:
         return
     auto_restore()
@@ -2343,13 +2336,6 @@ def process_private_photo(update: telegram.Update, context: telegram.ext.Callbac
 
 
 def process_channel_update(update: telegram.Update, context: telegram.ext.CallbackContext):
-    """
-
-    Args:
-        update (telegram.Update)
-        context (telegram.ext.CallbackContext)
-
-    """
     auto_restore()
     if update.channel_post is None:
         return
@@ -2400,11 +2386,16 @@ def process_callback_query(update: telegram.Update, context: telegram.ext.Callba
         if data == MOVE_UP_MARKUP:
             reorder_up(update, context, source, names)
         elif data == MOVE_DOWN_MARKUP:
-            reorder_down(update, context, reg_channel.categories, names)
+            reorder_down(update, context, source, names)
         elif data == DONE_MARKUP:
             query.answer()
             query.edit_message_text(text=f"{get_list_text(names)}\n\n{DONE_MARKUP}")
-            go_to_categories(update, context)
+            if reg_user.status == "reordering_categories":
+                go_to_categories(update, context)
+            elif reg_user.status == "reordering_template_content":
+                go_to_template(update, context)
+            elif reg_user.status == "reordering_category_contents":
+                go_to_category_customization(update, context)
 
 
 def main():
