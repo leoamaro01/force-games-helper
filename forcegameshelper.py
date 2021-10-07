@@ -920,7 +920,7 @@ def get_template_string(username: str, messages: list[SavedMessage]):
                                                 found = True
                                                 break
                                         if not found:
-                                            message = message.replace("$contenido{}$".format(i), "-")
+                                            message = message.replace("$contenido{}$".format(i), "\\-")
                             elif reg_channel.template_contents:
                                 for i in range(len(reg_channel.template_contents)):
                                     if "$contenido{}$".format(i) in template_format:
@@ -933,7 +933,7 @@ def get_template_string(username: str, messages: list[SavedMessage]):
                                                 found = True
                                                 break
                                         if not found:
-                                            message = message.replace("$contenido{}$".format(i), "-")
+                                            message = message.replace("$contenido{}$".format(i), "\\-")
                             cat_messages.append(message)
                 elif reg_channel.template_format:
                     template_format = reg_channel.template_format
@@ -955,7 +955,7 @@ def get_template_string(username: str, messages: list[SavedMessage]):
                                                 found = True
                                                 break
                                         if not found:
-                                            message = message.replace("$contenido{}$".format(i), "-")
+                                            message = message.replace("$contenido{}$".format(i), "\\-")
                             elif reg_channel.template_contents:
                                 for i in range(len(reg_channel.template_contents)):
                                     if "$contenido{}$".format(i) in template_format:
@@ -968,7 +968,7 @@ def get_template_string(username: str, messages: list[SavedMessage]):
                                                 found = True
                                                 break
                                         if not found:
-                                            message = message.replace("$contenido{}$".format(i), "-")
+                                            message = message.replace("$contenido{}$".format(i), "\\-")
                             cat_messages.append(message)
                 else:
                     for m in messages:
@@ -1036,7 +1036,7 @@ def get_template_string(username: str, messages: list[SavedMessage]):
                                             found = True
                                             break
                                     if not found:
-                                        message = message.replace("$contenido{}$".format(i), "-")
+                                        message = message.replace("$contenido{}$".format(i), "\\-")
                         final_messages.append(message)
             else:
                 for m in messages:
