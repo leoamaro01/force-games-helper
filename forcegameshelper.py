@@ -602,7 +602,7 @@ def post_summary(channel_username: str):
 
     if reg_channel.template != "":
         if reg_channel.template_picture is not None and reg_channel.template_picture != "":
-            bot.send_photo(chat_id=reg_channel.chat_id, photo=reg_channel.template_picture)
+            sent: telegram.Message = bot.send_photo(chat_id=reg_channel.chat_id, photo=reg_channel.template_picture)
         text = get_template_string(atusername, reg_channel.saved_messages)
         summary_id = bot.send_message(chat_id=reg_channel.chat_id,
                                       text=text,
@@ -882,15 +882,7 @@ def add_to_last_summary_messages(username, message):
             SavedMessage(message.message_id, title, datetime.now(), custom_content, category))
 
 
-def get_template_string(username, messages):
-    """
-    Args:
-        username (str)
-        messages (list of SavedMessage)
-
-    Returns:
-        str: The formatted template for chanel `username`
-    """
+def get_template_string(username: str, messages: list[SavedMessage]):
     atusername = get_at_username(username)
     reg_channel = registered_channels[atusername]
     template = escape_for_telegram(reg_channel.template)
@@ -899,9 +891,52 @@ def get_template_string(username, messages):
         index = 0
         for cat in reg_channel.categories:
             if "$plantilla{}$".format(index) in template:
+                cat_messages = []
                 if cat.template_format:
                     template_format = cat.template_format
-                    cat_messages = []
+                    for m in messages:
+                        if not m.category:
+                            m.category = ""
+
+                        if cat.identifiers:
+                            is_valid = m.category in cat.identifiers
+                        else:
+                            is_valid = m.category == cat.name
+
+                        if is_valid:
+                            message = escape_for_telegram(template_format).replace(
+                                "$titulo$", "[{}]({})".format(
+                                    escape_for_telegram(m.text.replace(m.category, "").strip()),
+                                    get_message_link(username, m.message_id)))
+                            if cat.category_contents:
+                                for i in range(len(cat.category_contents)):
+                                    if "$contenido{}$".format(i) in template_format:
+                                        found = False
+                                        for content in m.custom_contents:
+                                            if cat.category_contents[i] in content:
+                                                message = message.replace("$contenido{}$".format(i),
+                                                                          content.replace(
+                                                                              cat.category_contents[i], ""))
+                                                found = True
+                                                break
+                                        if not found:
+                                            message = message.replace("$contenido{}$".format(i), "-")
+                            elif reg_channel.template_contents:
+                                for i in range(len(reg_channel.template_contents)):
+                                    if "$contenido{}$".format(i) in template_format:
+                                        found = False
+                                        for content in m.custom_contents:
+                                            if reg_channel.template_contents[i] in content:
+                                                message = message.replace("$contenido{}$".format(i),
+                                                                          content.replace(reg_channel.template_contents[i],
+                                                                                          ""))
+                                                found = True
+                                                break
+                                        if not found:
+                                            message = message.replace("$contenido{}$".format(i), "-")
+                            cat_messages.append(message)
+                elif reg_channel.template_format:
+                    template_format = reg_channel.template_format
                     for m in messages:
                         if m.category in cat.identifiers:
                             message = escape_for_telegram(template_format).replace(
@@ -911,62 +946,48 @@ def get_template_string(username, messages):
                             if cat.category_contents:
                                 for i in range(len(cat.category_contents)):
                                     if "$contenido{}$".format(i) in template_format:
+                                        found = False
                                         for content in m.custom_contents:
                                             if cat.category_contents[i] in content:
                                                 message = message.replace("$contenido{}$".format(i),
                                                                           content.replace(
                                                                               cat.category_contents[i], ""))
+                                                found = True
                                                 break
+                                        if not found:
+                                            message = message.replace("$contenido{}$".format(i), "-")
                             elif reg_channel.template_contents:
                                 for i in range(len(reg_channel.template_contents)):
                                     if "$contenido{}$".format(i) in template_format:
+                                        found = False
                                         for content in m.custom_contents:
                                             if reg_channel.template_contents[i] in content:
                                                 message = message.replace("$contenido{}$".format(i),
                                                                           content.replace(reg_channel.template_contents[i],
                                                                                           ""))
+                                                found = True
                                                 break
+                                        if not found:
+                                            message = message.replace("$contenido{}$".format(i), "-")
                             cat_messages.append(message)
-                elif not reg_channel.template_format:
-                    cat_messages = []
+                else:
                     for m in messages:
                         if m.category in cat.identifiers:
                             message = "\\- [{}]({})".format(
                                 escape_for_telegram(m.text.replace(m.category, "").strip()),
                                 get_message_link(atusername, m.message_id))
-                            for i in range(len(cat.category_contents)):
-                                for content in m.custom_contents:
-                                    if cat.category_contents[i] in content:
-                                        message += " " + content.replace(cat.category_contents[i], "")
-                                        break
-                            cat_messages.append(message)
-                else:
-                    template_format = reg_channel.template_format
-                    cat_messages = []
-                    for m in messages:
-                        if m.category in cat.identifiers:
-                            message = escape_for_telegram(template_format).replace(
-                                "$titulo$", "[{}]({})".format(
-                                    escape_for_telegram(m.text.replace(m.category, "").strip()),
-                                    get_message_link(username, m.message_id)))
                             if cat.category_contents:
                                 for i in range(len(cat.category_contents)):
-                                    if "$contenido{}$".format(i) in template_format:
-                                        for content in m.custom_contents:
-                                            if cat.category_contents[i] in content:
-                                                message = message.replace("$contenido{}$".format(i),
-                                                                          content.replace(
-                                                                              cat.category_contents[i], ""))
-                                                break
+                                    for content in m.custom_contents:
+                                        if cat.category_contents[i] in content:
+                                            message += " " + content.replace(cat.category_contents[i], "")
+                                            break
                             elif reg_channel.template_contents:
                                 for i in range(len(reg_channel.template_contents)):
-                                    if "$contenido{}$".format(i) in template_format:
-                                        for content in m.custom_contents:
-                                            if reg_channel.template_contents[i] in content:
-                                                message = message.replace("$contenido{}$".format(i),
-                                                                          content.replace(reg_channel.template_contents[i],
-                                                                                          ""))
-                                                break
+                                    for content in m.custom_contents:
+                                        if reg_channel.template_contents[i] in content:
+                                            message += " " + content.replace(reg_channel.template_contents[i], "")
+                                            break
                             cat_messages.append(message)
                 if cat_messages:
                     template = template.replace("$plantilla{}$".format(index), "\n".join(cat_messages))
@@ -987,11 +1008,54 @@ def get_template_string(username, messages):
     elif "$plantilla$" in template:
         if messages:
             final_messages = []
-            for m in messages:
-                message = "\\- [{}]({})".format(
-                    escape_for_telegram(m.text.replace(m.category, "").strip()),
-                    get_message_link(atusername, m.message_id))
-                final_messages.append(message)
+            if reg_channel.template_format:
+                template_format = reg_channel.template_format
+                for m in messages:
+                    if not m.category:
+                        m.category = ""
+
+                    if reg_channel.identifiers:
+                        is_valid = m.category in reg_channel.identifiers
+                    else:
+                        is_valid = True
+
+                    if is_valid:
+                        message = escape_for_telegram(template_format).replace(
+                            "$titulo$", "[{}]({})".format(
+                                escape_for_telegram(m.text.replace(m.category, "").strip()),
+                                get_message_link(username, m.message_id)))
+                        if reg_channel.template_contents:
+                            for i in range(len(reg_channel.template_contents)):
+                                if "$contenido{}$".format(i) in template_format:
+                                    found = False
+                                    for content in m.custom_contents:
+                                        if reg_channel.template_contents[i] in content:
+                                            message = message.replace("$contenido{}$".format(i),
+                                                                      content.replace(reg_channel.template_contents[i],
+                                                                                      ""))
+                                            found = True
+                                            break
+                                    if not found:
+                                        message = message.replace("$contenido{}$".format(i), "-")
+                        final_messages.append(message)
+            else:
+                for m in messages:
+                    if reg_channel.identifiers:
+                        is_valid = m.category in reg_channel.identifiers
+                    else:
+                        is_valid = True
+
+                    if is_valid:
+                        message = "\\- [{}]({})".format(
+                            escape_for_telegram(m.text.replace(m.category, "").strip()),
+                            get_message_link(atusername, m.message_id))
+                        if reg_channel.template_contents:
+                            for i in range(len(reg_channel.template_contents)):
+                                for content in m.custom_contents:
+                                    if reg_channel.template_contents[i] in content:
+                                        message += " " + content.replace(reg_channel.template_contents[i], "")
+                                        break
+                        final_messages.append(message)
             template = template.replace("$plantilla$", "\n".join(final_messages))
         else:
             template = template.replace("$plantilla$", "\\-")
