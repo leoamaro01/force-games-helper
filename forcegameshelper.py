@@ -581,15 +581,12 @@ def add_to_known_channels(reg_user, channel):
         reg_user.known_channels.pop(-1)
 
 
-def try_post_summary(username):
-    """
-
-    Args:
-        username (str)
-
-    """
+def try_post_summary(username: str):
     atusername = get_at_username(username)
     reg_channel = registered_channels[atusername]
+
+    if not reg_channel.send_automatically:
+        return
 
     delta = timedelta(hours=reg_channel.template_time_dif)
     target_time = reg_channel.last_summary_time + delta
@@ -597,15 +594,7 @@ def try_post_summary(username):
         post_summary(atusername)
 
 
-def post_summary(channel_username):
-    """
-
-    Args:
-        channel_username (str)
-
-    Returns:
-        bool: True if the message was succesfully posted, False otherwise
-    """
+def post_summary(channel_username: str):
     atusername = get_at_username(channel_username)
     reg_channel = registered_channels[atusername]
 
@@ -618,8 +607,7 @@ def post_summary(channel_username):
 
     if reg_channel.template != "":
         if reg_channel.template_picture is not None and reg_channel.template_picture != "":
-            bot.send_photo(chat_id=reg_channel.chat_id, photo=reg_channel.template_picture,
-                           reply_markup=ReplyKeyboardRemove())
+            bot.send_photo(chat_id=reg_channel.chat_id, photo=reg_channel.template_picture)
         text = get_template_string(atusername, reg_channel.saved_messages)
         summary_id = bot.send_message(chat_id=reg_channel.chat_id,
                                       text=text,
@@ -655,13 +643,6 @@ def get_bot_chat_member(chat_username):
 
 
 def add_to_last_summary(chat, message):
-    """
-
-    Args:
-        chat (telegram.Chat)
-        message (telegram.Message)
-
-    """
     atusername = get_at_username(chat.username)
     reg_channel = registered_channels[atusername]
 
@@ -2368,8 +2349,6 @@ def process_channel_update(update: telegram.Update, context: telegram.ext.Callba
     add_to_saved_messages(atusername, update.channel_post)
     add_to_last_summary(chat, update.channel_post)
 
-    try_post_summary(atusername)
-
 
 def process_callback_query(update: telegram.Update, context: telegram.ext.CallbackContext):
     """
@@ -2409,7 +2388,7 @@ def process_callback_query(update: telegram.Update, context: telegram.ext.Callba
             reorder_down(update, context, source, names)
         elif data == DONE_MARKUP:
             query.answer()
-            query.edit_message_text(text=f"{get_list_text(names)}\n\n{DONE_MARKUP}")
+            query.edit_message_text(text=f"{get_list_text(names if names else source)}\n\n{DONE_MARKUP}")
             if reg_user.status == "reordering_categories":
                 go_to_categories(update, context)
             elif reg_user.status == "reordering_template_content":
