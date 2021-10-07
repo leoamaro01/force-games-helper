@@ -9,8 +9,7 @@ from threading import Timer
 from datetime import datetime, timedelta
 from typing import Optional, Any
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
-from telegram import ReplyKeyboardMarkup, Bot, TelegramError, ReplyKeyboardRemove, \
-    InlineKeyboardButton, InlineKeyboardMarkup, ReplyMarkup
+from telegram import ReplyKeyboardMarkup, Bot, TelegramError, InlineKeyboardButton, InlineKeyboardMarkup, ReplyMarkup
 
 CHANNEL_VERSION = "1.1"
 USER_VERSION = "1.0"
@@ -570,15 +569,11 @@ def get_list_text(lst: list[str], highlight: Optional[int] = -1):
         for i in range(len(lst))])
 
 
-def add_to_known_channels(reg_user, channel):
-    """
-    Args:
-        reg_user (RegisteredUser)
-        channel (str)
-    """
-    reg_user.known_channels.insert(0, channel)
-    while len(reg_user.known_channels) > MAX_KNOWN_CHANNELS:
-        reg_user.known_channels.pop(-1)
+def add_to_known_channels(reg_user: RegisteredUser, channel: str):
+    if channel not in reg_user.known_channels:
+        reg_user.known_channels.insert(0, channel)
+        while len(reg_user.known_channels) > MAX_KNOWN_CHANNELS:
+            reg_user.known_channels.pop(-1)
 
 
 def try_post_summary(username: str):
