@@ -762,14 +762,8 @@ def get_markup(status, **kwargs) -> ReplyMarkup:
             ], resize_keyboard=True)
 
 
-def get_message_data(username, message) -> tuple[str, Optional[Category], list[str]]:
-    """
-
-       Args:
-           username (str)
-           message (telegram.Message)
-
-    """
+def get_message_data(username: str, message: telegram.Message) \
+        -> tuple[str, Optional[Category], list[str]]:
     atusername = get_at_username(username)
     reg_channel = registered_channels[atusername]
 
@@ -800,7 +794,9 @@ def get_message_data(username, message) -> tuple[str, Optional[Category], list[s
                                 title = split[e]
                                 break
                     break
-        if category and title:
+            if title:
+                break
+        if title:
             cat = get_cat_from_alias(category, reg_channel.categories)
             if cat.category_contents:
                 for line in split:
@@ -814,17 +810,29 @@ def get_message_data(username, message) -> tuple[str, Optional[Category], list[s
                         custom_content.append(line)
     else:
         if reg_channel.identifiers:
-            for line in split:
-                identifier = elements_in_text(line.strip(), reg_channel.identifiers)
+            for i in range(len(split)):
+                identifier = elements_in_text(split[i].strip(), reg_channel.identifiers)
                 if identifier:
-                    title = line
                     category = identifier
+                    if split[i].replace(identifier, "").strip():
+                        title = split[i]
+                    else:
+                        for e in range(i + 1, len(split)):
+                            if split[e].strip():
+                                title = split[e]
+                                break
                     break
         else:
             for line in split:
                 if line.strip():
                     title = line
                     break
+
+        if title and reg_channel.template_contents:
+            for line in split:
+                content = elements_in_text(line, reg_channel.template_contents)
+                if content:
+                    custom_content.append(line)
 
     if len(title) > MAX_CHARACTERS_IN_TITLE:
         title = title[0:MAX_CHARACTERS_IN_TITLE - 1] + "..."
