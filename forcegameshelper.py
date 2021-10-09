@@ -494,11 +494,6 @@ def cleanup():
 
 
 def get_chat_id(update: telegram.Update, context: telegram.ext.CallbackContext):
-    """
-    Args:
-        update (telegram.Update)
-        context (telegram.ext.CallbackContext)
-    """
     if update.effective_user.id == admin_chat_id:
         if len(context.args) > 0:
             try:
@@ -508,21 +503,13 @@ def get_chat_id(update: telegram.Update, context: telegram.ext.CallbackContext):
 
 
 def stats(update: telegram.Update, context: telegram.ext.CallbackContext):
-    """
-    Args:
-        update (telegram.Update)
-        context (telegram.ext.CallbackContext)
-    """
     if update.effective_user.id == admin_chat_id:
         text = \
             "Registered Channels: {}\n" \
-            "Registered Users: {}\n" \
-            "Last Update: {}". \
+            "Registered Users: {}\n".\
             format(len(registered_channels),
-                   len(registered_users),
-                   (update_checker[0].isoformat(), "Never")[len(update_checker) == 0])
+                   len(registered_users))
         update.message.reply_text(text)
-    # Commands
 
 
 def auto_update():
@@ -531,9 +518,9 @@ def auto_update():
 
 
 def auto_backup():
+    cleanup()
+    auto_update()
     if bot_cloud is not None:
-        cleanup()
-        auto_update()
         serialize_bot_data("bot_data.json")
         file = open("bot_data.json", "rb")
         result = bot_cloud.send_document(document=file, filename="bot_data.json")
@@ -612,7 +599,7 @@ def post_summary(channel_username: str):
             bot.pin_chat_message(reg_channel.chat_id, summary_id)
         reg_channel.last_summary_message_text = text
         reg_channel.last_summary_message_id = summary_id
-        reg_channel.last_saved_messages = reg_channel.saved_messages
+        reg_channel.last_saved_messages = list(reg_channel.saved_messages)
         delta = timedelta(hours=reg_channel.template_time_dif)
         if datetime.now() > reg_channel.last_summary_time + delta:
             reg_channel.last_summary_time = reg_channel.last_summary_time + delta
@@ -622,22 +609,14 @@ def post_summary(channel_username: str):
     return False
 
 
-def get_bot_chat_member(chat_username):
-    """
-    Args:
-        chat_username (str)
-
-    Returns:
-        telegram.ChatMember: The bot's member in the target chat
-
-    """
+def get_bot_chat_member(chat_username: str):
     atusername = get_at_username(chat_username)
     chat: telegram.Chat = bot.get_chat(chat_username)
     bot_user: telegram.User = bot.get_me()
     return chat.get_member(bot_user.id)
 
 
-def add_to_last_summary(chat, message):
+def add_to_last_summary(chat: telegram.Chat, message: telegram.Message):
     atusername = get_at_username(chat.username)
     reg_channel = registered_channels[atusername]
 
@@ -687,7 +666,8 @@ def get_cat_from_alias(alias: str, categories: list[Category]) -> Category:
             return cat
 
 
-def get_update_data(update: telegram.Update, status: str = "", **kwargs) -> tuple[RegisteredUser, RegisteredChannel, ReplyMarkup]:
+def get_update_data(update: telegram.Update, status: str = "", **kwargs) \
+        -> tuple[RegisteredUser, RegisteredChannel, ReplyMarkup]:
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
     reg_channel = None
     markup = None
@@ -717,7 +697,8 @@ def get_markup(status, **kwargs) -> ReplyMarkup:
                 [FIND_PROBLEMS_MARKUP],
                 [TEMPLATE_MENU_MARKUP],
                 [CATEGORIES_MENU_MARKUP],
-                [SEND_AUTOMATICALLY_ON_MARKUP if kwargs['reg_channel'].send_automatically else SEND_AUTOMATICALLY_OFF_MARKUP],
+                [SEND_AUTOMATICALLY_ON_MARKUP if kwargs[
+                    'reg_channel'].send_automatically else SEND_AUTOMATICALLY_OFF_MARKUP],
                 [CHANGE_SUMMARY_TIME_MARKUP],
                 [HELP_MARKUP],
                 [CANCEL_MARKUP]
@@ -846,20 +827,10 @@ def delete_old_messages(username):
 
     now = datetime.now()
     _24h = timedelta(hours=24)
-    for message in reg_channel.saved_messages:
-        late_time = message.message_time + _24h
-        if now > late_time:
-            reg_channel.saved_messages.remove(message)
+    reg_channel.saved_messages = list(filter(lambda m: (m.message_time + _24h) > now, reg_channel.saved_messages))
 
 
-def add_to_saved_messages(username, message):
-    """
-
-       Args:
-           username (str)
-           message (telegram.Message)
-
-    """
+def add_to_saved_messages(username: str, message: telegram.Message):
     atusername = get_at_username(username)
     reg_channel = registered_channels[atusername]
 
@@ -872,14 +843,7 @@ def add_to_saved_messages(username, message):
     delete_old_messages(atusername)
 
 
-def add_to_last_summary_messages(username, message):
-    """
-
-    Args:
-        username (str)
-        message (telegram.Message)
-
-    """
+def add_to_last_summary_messages(username: str, message: telegram.Message):
     atusername = get_at_username(username)
     reg_channel = registered_channels[atusername]
 
@@ -936,8 +900,9 @@ def get_template_string(username: str, messages: list[SavedMessage]):
                                         for content in m.custom_contents:
                                             if reg_channel.template_contents[i] in content:
                                                 message = message.replace("$contenido{}$".format(i),
-                                                                          content.replace(reg_channel.template_contents[i],
-                                                                                          ""))
+                                                                          content.replace(
+                                                                              reg_channel.template_contents[i],
+                                                                              ""))
                                                 found = True
                                                 break
                                         if not found:
@@ -971,8 +936,9 @@ def get_template_string(username: str, messages: list[SavedMessage]):
                                         for content in m.custom_contents:
                                             if reg_channel.template_contents[i] in content:
                                                 message = message.replace("$contenido{}$".format(i),
-                                                                          content.replace(reg_channel.template_contents[i],
-                                                                                          ""))
+                                                                          content.replace(
+                                                                              reg_channel.template_contents[i],
+                                                                              ""))
                                                 found = True
                                                 break
                                         if not found:
@@ -1411,8 +1377,9 @@ def switch_send_automatically(update: telegram.Update, context: telegram.ext.Cal
 
     reg_channel.send_automatically = not reg_channel.send_automatically
 
-    update.message.reply_text("Ahora se enviarán automáticamente los resúmenes al canal 🔁" if reg_channel.send_automatically
-                              else "Ya no se enviarán automáticamente los resúmenes al canal")
+    update.message.reply_text(
+        "Ahora se enviarán automáticamente los resúmenes al canal 🔁" if reg_channel.send_automatically
+        else "Ya no se enviarán automáticamente los resúmenes al canal")
     go_to_customization(update, context)
 
 
@@ -1750,7 +1717,8 @@ def see_template_identifiers(update: telegram.Update, context: telegram.ext.Call
 def request_remove_template_identifier(update: telegram.Update, context: telegram.ext.CallbackContext):
     reg_user, reg_channel, markup = get_update_data(update, "requested_remove_tempalte_identifier")
     if reg_channel.identifiers:
-        send_request(update, "Cuál es el número del identificador que desea eliminar?", "requested_remove_template_identifier",
+        send_request(update, "Cuál es el número del identificador que desea eliminar?",
+                     "requested_remove_template_identifier",
                      reg_user=reg_user, markup=markup)
     else:
         update.message.reply_text("No ha añadido ningún identificador a esta plantilla")
@@ -1969,14 +1937,17 @@ def change_template(update: telegram.Update, context: telegram.ext.CallbackConte
     new_template = update.message.text
 
     if len(new_template) > MAX_TEMPLATE_LENGTH:
-        update.message.reply_text(f"❌ Esa plantilla excede el máximo de caracteres permitidos ({MAX_TEMPLATE_LENGTH}), intente acortarla")
+        update.message.reply_text(
+            f"❌ Esa plantilla excede el máximo de caracteres permitidos ({MAX_TEMPLATE_LENGTH}), intente acortarla")
         return
     elif len(new_template) > WARNING_TEMPLATE_LENGTH:
-        update.message.reply_text(f"⚠️ Esa plantilla excede el número de caracteres recomendados ({WARNING_TEMPLATE_LENGTH}), es posible que no se publique correctamente si el canal recibe demasiado contenido")
+        update.message.reply_text(
+            f"⚠️ Esa plantilla excede el número de caracteres recomendados ({WARNING_TEMPLATE_LENGTH}), es posible que no se publique correctamente si el canal recibe demasiado contenido")
 
     pattern = r"\$plantilla\d*\$"
     if not re.search(pattern, new_template):
-        update.message.reply_text("Esa plantilla no contiene ninguna de las etiquetas $plantilla$ o $plantilla#$, debe contener una de las dos.")
+        update.message.reply_text(
+            "Esa plantilla no contiene ninguna de las etiquetas $plantilla$ o $plantilla#$, debe contener una de las dos.")
         return
 
     reg_channel.template = new_template
