@@ -2385,14 +2385,34 @@ def process_channel_update(update: telegram.Update, context: telegram.ext.Callba
     add_to_last_summary(chat, update.channel_post)
 
 
+def process_edited_channel_post(update: telegram.Update, context: telegram.ext.CallbackContext):
+    auto_restore()
+
+    chat = update.effective_chat
+    atusername = get_at_username(chat.username)
+    if atusername not in registered_channels:
+        return
+    reg_channel = registered_channels[atusername]
+
+    post = update.edited_channel_post
+    message_id = post.message_id
+
+    search = filter(lambda m: m.message_id == message_id, reg_channel.saved_messages)
+    if search:
+        for found in search:
+            reg_channel.saved_messages.remove(found)
+
+        add_to_saved_messages(atusername, post)
+
+    search = filter(lambda m: m.message_id == message_id, reg_channel.last_saved_messages)
+    if search:
+        for found in search:
+            reg_channel.last_saved_messages.remove(found)
+
+        add_to_last_summary(chat, post)
+
+
 def process_callback_query(update: telegram.Update, context: telegram.ext.CallbackContext):
-    """
-
-    Args:
-        update (telegram.Update)
-        context (telegram.ext.CallbackContext)
-
-    """
     query = update.callback_query
     if isinstance(query, telegram.ext.InvalidCallbackData):
         return
@@ -2422,7 +2442,6 @@ def process_callback_query(update: telegram.Update, context: telegram.ext.Callba
         elif data == MOVE_DOWN_MARKUP:
             reorder_down(update, context, source, names)
         elif data == DONE_MARKUP:
-            query.answer()
             query.edit_message_text(text=f"{get_list_text(names if names else source)}\n\n{DONE_MARKUP}")
             if reg_user.status == "reordering_categories":
                 go_to_categories(update, context)
@@ -2460,6 +2479,7 @@ def main():
 
     dp.add_handler(MessageHandler(Filters.chat_type.channel & (Filters.text | Filters.caption),
                                   process_channel_update))
+    dp.add_handler(MessageHandler(Filters.update.edited_channel_post, process_edited_channel_post))
 
     auto_restore()
     auto_backup()
