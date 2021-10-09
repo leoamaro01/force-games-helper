@@ -601,10 +601,7 @@ def post_summary(channel_username: str):
         reg_channel.last_summary_message_id = summary_id
         reg_channel.last_saved_messages = list(reg_channel.saved_messages)
         delta = timedelta(hours=reg_channel.template_time_dif)
-        if datetime.now() > reg_channel.last_summary_time + delta:
-            reg_channel.last_summary_time = reg_channel.last_summary_time + delta
-        else:
-            reg_channel.last_summary_time = datetime.now()
+        reg_channel.last_summary_time = datetime.now()
         return True
     return False
 
