@@ -1,5 +1,6 @@
 import logging
 import json
+from tokenize import Token
 import telegram
 import os
 from threading import Timer
@@ -56,7 +57,8 @@ def decode_bot_data(dct: dict):
                                  last_saved_messages=dct['last_saved_messages'],
                                  last_summary_message_id=dct['last_summary_message_id'],
                                  categories=dct['categories'],
-                                 last_summary_time=datetime.fromisoformat(dct['last_summary_time']),
+                                 last_summary_time=datetime.fromisoformat(
+                                     dct['last_summary_time']),
                                  last_summary_message_text=dct['last_summary_message_text'],
                                  template_format=dct['template_format'],
                                  parts_identifier=dct['parts_identifier']
@@ -341,7 +343,8 @@ def broadcast(update, context):
     if update.effective_user.id == admin_chat_id:
         for user in registered_users.values():
             try:
-                bot.send_message(user.chat_id, update.message.text.replace("/broadcast", ""))
+                bot.send_message(
+                    user.chat_id, update.message.text.replace("/broadcast", ""))
             except TelegramError:
                 registered_users.pop(str(user.chat_id))
 
@@ -359,7 +362,8 @@ def get_chat_id(update, context):
     if update.effective_user.id == admin_chat_id:
         if len(context.args) > 0:
             try:
-                update.message.reply_text(str(bot.get_chat(context.args[0]).id))
+                update.message.reply_text(
+                    str(bot.get_chat(context.args[0]).id))
             except TelegramError:
                 update.message.reply_text("Chat no encontrado.")
 
@@ -385,7 +389,8 @@ def auto_backup():
     if bot_cloud is not None:
         serialize_bot_data("bot_data.json")
         file = open("bot_data.json", "rb")
-        result = bot_cloud.send_document(document=file, filename="bot_data.json")
+        result = bot_cloud.send_document(
+            document=file, filename="bot_data.json")
         bot_cloud.pin_message(result.message_id)
         file.close()
         global update_timer
@@ -456,7 +461,8 @@ def post_summary(channel_username):
 
     if reg_channel.template != "":
         if reg_channel.template_picture is not None and reg_channel.template_picture != "":
-            bot.send_photo(chat_id=reg_channel.chat_id, photo=reg_channel.template_picture)
+            bot.send_photo(chat_id=reg_channel.chat_id,
+                           photo=reg_channel.template_picture)
         text = get_template_string(atusername, reg_channel.saved_messages)
         summary_id = bot.send_message(chat_id=reg_channel.chat_id,
                                       text=text,
@@ -632,28 +638,33 @@ def get_template_string(username, messages):
             if "$plantilla{}$".format(index) in template:
                 if reg_channel.template_format == "":
                     cat_messages = ["\\-[{}]({})".format(
-                                        escape_for_telegram(m.text.replace(cat, "").strip()),
-                                        get_message_link(atusername, m.message_id),) +
-                                    ("", "*\\[{}\\]*".format(escape_for_telegram(m.parts.replace(parts_id, "").strip())))
-                                    [reg_channel.parts_identifier != "" and
-                                     m.parts.replace(parts_id, "").strip() != ""]
-                                    for m in messages
-                                    if m.category == cat]
+                        escape_for_telegram(m.text.replace(cat, "").strip()),
+                        get_message_link(atusername, m.message_id),) +
+                        ("", "*\\[{}\\]*".format(escape_for_telegram(
+                            m.parts.replace(parts_id, "").strip())))
+                        [reg_channel.parts_identifier != "" and
+                         m.parts.replace(parts_id, "").strip() != ""]
+                        for m in messages
+                        if m.category == cat]
                 else:
                     cat_messages = [escape_for_telegram(reg_channel.template_format).replace(
                                     escape_for_telegram("{titulo}"), "[{}]({})".format(
-                                        escape_for_telegram(m.text.replace(cat, "").strip()),
+                                        escape_for_telegram(
+                                            m.text.replace(cat, "").strip()),
                                         get_message_link(atusername, m.message_id),)).replace(
                                             escape_for_telegram("{partes}"),
-                                            ("", "*\\[{}\\]*".format(escape_for_telegram(m.parts.replace(parts_id, "").strip())))
+                                            ("", "*\\[{}\\]*".format(escape_for_telegram(
+                                                m.parts.replace(parts_id, "").strip())))
                                             [reg_channel.parts_identifier != "" and
                                              m.parts.replace(parts_id, "").strip() != ""])
                                     for m in messages
                                     if m.category == cat]
                 if len(cat_messages) > 0:
-                    template = template.replace("$plantilla{}$".format(index), "\n".join(cat_messages))
+                    template = template.replace(
+                        "$plantilla{}$".format(index), "\n".join(cat_messages))
                 else:
-                    template = template.replace("$plantilla{}$".format(index), "\\-")
+                    template = template.replace(
+                        "$plantilla{}$".format(index), "\\-")
             index += 1
     elif "$plantilla$" in template:
         if len(messages) > 0:
@@ -661,21 +672,24 @@ def get_template_string(username, messages):
                 final_messages = ["\\-[{}]({})".format(
                     escape_for_telegram(m.text.strip()),
                     get_message_link(atusername, m.message_id), ) +
-                                ("", "*\\[{}\\]*".format(escape_for_telegram(m.parts.replace(parts_id, "").strip())))
-                                [reg_channel.parts_identifier != "" and
-                                 m.parts.replace(parts_id, "").strip() != ""]
-                                for m in messages]
+                    ("", "*\\[{}\\]*".format(escape_for_telegram(
+                        m.parts.replace(parts_id, "").strip())))
+                    [reg_channel.parts_identifier != "" and
+                     m.parts.replace(parts_id, "").strip() != ""]
+                    for m in messages]
             else:
                 final_messages = [escape_for_telegram(reg_channel.template_format).replace(
                     escape_for_telegram("{titulo}"), "[{}]({})".format(
                         escape_for_telegram(m.text.strip()),
                         get_message_link(atusername, m.message_id), )).replace(
                     escape_for_telegram("{partes}"),
-                    ("", "*\\[{}\\]*".format(escape_for_telegram(m.parts.replace(parts_id, "").strip())))
+                    ("", "*\\[{}\\]*".format(escape_for_telegram(
+                        m.parts.replace(parts_id, "").strip())))
                     [reg_channel.parts_identifier != "" and
                      m.parts.replace(parts_id, "").strip() != ""])
                     for m in messages]
-            template = template.replace("$plantilla$", "\n".join(final_messages))
+            template = template.replace(
+                "$plantilla$", "\n".join(final_messages))
         else:
             template = template.replace("$plantilla$", "\\-")
     template += "\n🤖📝 [\\[Bot de Resúmenes\\]](t.me/ForceGamesHelperBot) 📝🤖"
@@ -816,14 +830,16 @@ def customize_channel(update, context):
     atusername = get_at_username(update.message.text)
     try:
         if atusername in registered_channels:
-            admin_status = is_admin(bot.get_chat(atusername), update.effective_user.id)
+            admin_status = is_admin(bot.get_chat(
+                atusername), update.effective_user.id)
             if admin_status[0]:
                 go_to_customization(update, context)
                 reg_user.context_data['channel'] = atusername
             else:
                 update.message.reply_text(admin_status[1])
         else:
-            update.message.reply_text("El canal " + atusername + " no está registrado 😗")
+            update.message.reply_text(
+                "El canal " + atusername + " no está registrado 😗")
             go_to_base(update, context)
     except TelegramError:
         update.message.reply_text("El canal " + atusername + " no se encontró")
@@ -843,7 +859,8 @@ def go_to_customization(update, context):
             [FIND_PROBLEMS_MARKUP],
             [CHANGE_TEMPLATE_MARKUP, SEE_TEMPLATE_MARKUP],
             [CHANGE_TEMPLATE_FORMAT_MARKUP, DELETE_TEMPLATE_FORMAT_MARKUP],
-            [CHANGE_TEMPLATE_PICTURE_MARKUP, SEE_TEMPLATE_PICTURE_MARKUP, DELETE_TEMPLATE_PICTURE_MARKUP],
+            [CHANGE_TEMPLATE_PICTURE_MARKUP, SEE_TEMPLATE_PICTURE_MARKUP,
+                DELETE_TEMPLATE_PICTURE_MARKUP],
             [CHANGE_PARTS_ID_MARKUP, DELETE_PARTS_ID_MARKUP],
             [CATEGORIES_MENU_MARKUP],
             [CHANGE_SUMMARY_TIME_MARKUP],
@@ -851,7 +868,8 @@ def go_to_customization(update, context):
             [CANCEL_MARKUP]
         ], resize_keyboard=True
     )
-    update.message.reply_text(text="¿Qué desea configurar? 🧐", reply_markup=markup)
+    update.message.reply_text(
+        text="¿Qué desea configurar? 🧐", reply_markup=markup)
     reg_user.status = "customizing"
 
 
@@ -887,7 +905,8 @@ def get_categories_list_text(reg_channel, highlight: Optional[int] = -1):
         ("", "__*")[highlight == i],
         i,
         ("\\", "")[highlight == -1],
-        (escape_for_telegram(reg_channel.categories[i]), reg_channel.categories[i])[highlight == -1],
+        (escape_for_telegram(reg_channel.categories[i]), reg_channel.categories[i])[
+            highlight == -1],
         ("", "*__")[highlight == i])
         for i in range(len(reg_channel.categories))])
 
@@ -984,7 +1003,8 @@ def change_format(update, context):
         update.message.reply_text("Formato cambiado! :D")
         go_to_customization(update, context)
     else:
-        update.message.reply_text("El formato debe contener la etiqueta {titulo} >:/")
+        update.message.reply_text(
+            "El formato debe contener la etiqueta {titulo} >:/")
 
 
 def delete_format(update, context):
@@ -999,9 +1019,11 @@ def delete_format(update, context):
     reg_channel = registered_channels[reg_user.context_data['channel']]
     if reg_channel.template_format != "":
         reg_channel.template_format = ""
-        update.message.reply_text("Formato eliminado, usa {} para crear uno nuevo.".format(CHANGE_TEMPLATE_FORMAT_MARKUP))
+        update.message.reply_text("Formato eliminado, usa {} para crear uno nuevo.".format(
+            CHANGE_TEMPLATE_FORMAT_MARKUP))
     else:
-        update.message.reply_text("No se ha establecido un formato para este canal")
+        update.message.reply_text(
+            "No se ha establecido un formato para este canal")
 
 
 def request_change_parts_id(update, context):
@@ -1048,9 +1070,11 @@ def delete_parts_id(update, context):
     reg_channel = registered_channels[reg_user.context_data['channel']]
     if reg_channel.parts_identifier != "":
         reg_channel.parts_identifier = ""
-        update.message.reply_text("Identificador eliminado, usa {} para crear uno nuevo.".format(CHANGE_PARTS_ID_MARKUP))
+        update.message.reply_text(
+            "Identificador eliminado, usa {} para crear uno nuevo.".format(CHANGE_PARTS_ID_MARKUP))
     else:
-        update.message.reply_text("No se ha establecido un identificador de partes para este canal")
+        update.message.reply_text(
+            "No se ha establecido un identificador de partes para este canal")
 
 
 def delete_template_picture(update, context):
@@ -1063,9 +1087,11 @@ def delete_template_picture(update, context):
     reg_channel = registered_channels[reg_user.context_data['channel']]
     if reg_channel.template != "":
         reg_channel.template_picture = ""
-        update.message.reply_text("Foto eliminada, usa {} para establecer una nueva.".format(CHANGE_TEMPLATE_PICTURE_MARKUP))
+        update.message.reply_text("Foto eliminada, usa {} para establecer una nueva.".format(
+            CHANGE_TEMPLATE_PICTURE_MARKUP))
     else:
-        update.message.reply_text("No se ha establecido una foto de resumen para este canal")
+        update.message.reply_text(
+            "No se ha establecido una foto de resumen para este canal")
 
 
 def base_help(update, context):
@@ -1100,7 +1126,8 @@ def see_categories(update, context):
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
     reg_channel = registered_channels[reg_user.context_data['channel']]
     if len(reg_channel.categories) == 0:
-        update.message.reply_text("No hay ninguna categoría establecida para este canal")
+        update.message.reply_text(
+            "No hay ninguna categoría establecida para este canal")
     else:
         update.message.reply_text(get_categories_list_text(reg_channel))
 
@@ -1117,7 +1144,8 @@ def request_add_category(update, context):
             [CANCEL_MARKUP]
         ], resize_keyboard=True
     )
-    update.message.reply_text("Cuál sera el identificador de la nueva categoría?", reply_markup=markup)
+    update.message.reply_text(
+        "Cuál sera el identificador de la nueva categoría?", reply_markup=markup)
     reg_user.status = "requested_add_category"
 
 
@@ -1128,7 +1156,8 @@ def add_category(update, context):
         context (telegram.ext.CallbackContext)
     """
     if update.message.text.strip(" \t") == "":
-        update.message.reply_text("El identificador de la categoría no puede estar vacio")
+        update.message.reply_text(
+            "El identificador de la categoría no puede estar vacio")
         return
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
     reg_channel = registered_channels[reg_user.context_data['channel']]
@@ -1157,7 +1186,8 @@ def request_remove_category(update, context):
                                   reply_markup=markup)
         reg_user.status = "requested_remove_category"
     else:
-        update.message.reply_text("No se ha establecido ninguna categoría en este canal")
+        update.message.reply_text(
+            "No se ha establecido ninguna categoría en este canal")
 
 
 def remove_category(update, context):
@@ -1193,7 +1223,8 @@ def request_reorder_categories(update, context):
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
     reg_channel = registered_channels[reg_user.context_data['channel']]
     if len(reg_channel.categories) <= 1:
-        update.message.reply_text("Solo puede reordenar categorías luego de añadir 2 o mas categorías.")
+        update.message.reply_text(
+            "Solo puede reordenar categorías luego de añadir 2 o mas categorías.")
         go_to_categories(update, context)
         return
     markup = ReplyKeyboardMarkup(
@@ -1254,7 +1285,8 @@ def reorder_categories(update, context):
     update.message.reply_text(
         "Utilice los botones para mover el elemento seleccionado:\n\n"
         "{}\n\n"
-        "Presione {} para terminar".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
+        "Presione {} para terminar".format(
+            get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
         reply_markup=markup,
         parse_mode="MarkdownV2")
     reg_user.status = "reordering_categories"
@@ -1303,7 +1335,8 @@ def move_category_up(update, context):
     update.message.reply_text(
         "Utilice los botones para mover el elemento seleccionado:\n\n"
         "{}\n\n"
-        "Presione {} para terminar".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
+        "Presione {} para terminar".format(
+            get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
         reply_markup=markup,
         parse_mode="MarkdownV2")
 
@@ -1350,7 +1383,8 @@ def move_category_down(update, context):
     update.message.reply_text(
         "Utilice los botones para mover el elemento seleccionado:\n\n"
         "{}\n\n"
-        "Presione {} para terminar".format(get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
+        "Presione {} para terminar".format(
+            get_categories_list_text(reg_channel, index), CANCEL_MARKUP),
         reply_markup=markup,
         parse_mode="MarkdownV2")
 
@@ -1382,7 +1416,8 @@ def change_template(update, context):
         context (telegram.ext.CallbackContext)
     """
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
-    registered_channels[reg_user.context_data['channel']].template = update.message.text
+    registered_channels[reg_user.context_data['channel']
+                        ].template = update.message.text
     update.message.reply_text("Plantilla cambiada! :3")
     go_to_customization(update, context)
 
@@ -1398,7 +1433,8 @@ def see_template(update, context):
     if reg_channel.template != "":
         update.message.reply_text(reg_channel.template)
     else:
-        update.message.reply_text("No se ha establecido una plantilla para este canal")
+        update.message.reply_text(
+            "No se ha establecido una plantilla para este canal")
 
 
 def request_change_template_picture(update, context):
@@ -1413,7 +1449,8 @@ def request_change_template_picture(update, context):
             [CANCEL_MARKUP]
         ], resize_keyboard=True
     )
-    update.message.reply_text("Envíe la nueva foto de plantilla. 📸", reply_markup=markup)
+    update.message.reply_text(
+        "Envíe la nueva foto de plantilla. 📸", reply_markup=markup)
     reg_user.status = "requested_template_picture"
 
 
@@ -1424,7 +1461,8 @@ def change_template_picture(update, context):
         context (telegram.ext.CallbackContext)
     """
     reg_user = get_reg_user(update.effective_user, update.effective_chat)
-    registered_channels[reg_user.context_data['channel']].template_picture = update.message.photo[-1].file_id
+    registered_channels[reg_user.context_data['channel']
+                        ].template_picture = update.message.photo[-1].file_id
     update.message.reply_text("Foto establecida! :3")
     go_to_customization(update, context)
 
@@ -1440,7 +1478,8 @@ def see_template_picture(update, context):
     if reg_channel.template_picture != "":
         update.message.reply_photo(reg_channel.template_picture)
     else:
-        update.message.reply_text("No ha establecido una foto para este canal.")
+        update.message.reply_text(
+            "No ha establecido una foto para este canal.")
 
 
 def request_change_summary_time(update, context):
@@ -1474,7 +1513,8 @@ def change_summary_time(update, context):
         if time <= 0:
             update.message.reply_text("Eso no es un número válido :/")
         else:
-            registered_channels[reg_user.context_data['channel']].template_time_dif = time
+            registered_channels[reg_user.context_data['channel']
+                                ].template_time_dif = time
             update.message.reply_text("Tiempo entre resumenes cambiado :3")
     except ValueError:
         update.message.reply_text("Eso no es un número válido :/")
@@ -1506,7 +1546,8 @@ def register_channel(update, context):
     """
     atusername = get_at_username(update.message.text)
     if atusername in registered_channels:
-        update.message.reply_text("El canal {} ya se encuentra registrado".format(atusername))
+        update.message.reply_text(
+            "El canal {} ya se encuentra registrado".format(atusername))
         go_to_base(update, context)
         return
     try:
@@ -1516,13 +1557,15 @@ def register_channel(update, context):
             "No se encontró el canal :|")
         return
     if atusername in registered_channels:
-        update.message.reply_text("El canal {} ya se encuentra registrado".format(atusername))
+        update.message.reply_text(
+            "El canal {} ya se encuentra registrado".format(atusername))
         go_to_base(update, context)
         return
     admin_status = is_admin(channel, update.effective_user.id)
     if admin_status[0]:
         registered_channels[atusername] = RegisteredChannel(chat_id=channel.id)
-        add_to_known_channels(get_reg_user(update.effective_user, update.effective_chat), atusername)
+        add_to_known_channels(get_reg_user(
+            update.effective_user, update.effective_chat), atusername)
         update.message.reply_text(
             "Canal registrado! :D Ahora en el menú debes configurar la plantilla antes de que pueda ser usada 📄")
         go_to_base(update, context)
@@ -1556,9 +1599,11 @@ def unregister_channel(update, context):
     """
     channel = update.message.text
     if channel in registered_channels:
-        admin_status = is_admin(bot.get_chat(channel), update.effective_user.id)
+        admin_status = is_admin(bot.get_chat(
+            channel), update.effective_user.id)
         if admin_status[0]:
-            reg_user = get_reg_user(update.effective_user, update.effective_chat)
+            reg_user = get_reg_user(
+                update.effective_user, update.effective_chat)
             registered_channels.pop(channel)
             if channel in reg_user.known_channels:
                 reg_user.known_channels.remove(channel)
@@ -1628,7 +1673,8 @@ def help_handler(update, context):
         update (telegram.Update)
         context (telegram.ext.CallbackContext)
     """
-    update.message.reply_text("Utiliza los botones de ayuda para obtener ayuda sobre el bot")
+    update.message.reply_text(
+        "Utiliza los botones de ayuda para obtener ayuda sobre el bot")
 
 
 def backup(update, context):
@@ -1641,7 +1687,8 @@ def backup(update, context):
         return
     auto_backup()
     file = open("bot_data.json", "rb")
-    bot.send_document(chat_id=update.effective_chat.id, document=file, filename="bot_data.json")
+    bot.send_document(chat_id=update.effective_chat.id,
+                      document=file, filename="bot_data.json")
     file.close()
 
 
@@ -1658,7 +1705,8 @@ def restore(update, context):
         update.message.reply_text("Restored previous data!")
         update_checker[0] = datetime.now()
     else:
-        update.message.reply_text("That command must be a reply to the backup file")
+        update.message.reply_text(
+            "That command must be a reply to the backup file")
 
 
 def deserialize_bot_data(filename):
@@ -1717,7 +1765,8 @@ def process_private_message(update, context):
         elif text == HELP_MARKUP:
             base_help(update, context)
         else:
-            update.message.reply_text("Guat? No entendí :/ (recuerda que soy un bot y soy tonto X'''D")
+            update.message.reply_text(
+                "Guat? No entendí :/ (recuerda que soy un bot y soy tonto X'''D")
     elif status == "requested_customization":
         if text == CANCEL_MARKUP:
             update.message.reply_text("Cancelado")
@@ -1757,7 +1806,8 @@ def process_private_message(update, context):
         elif text == DELETE_TEMPLATE_FORMAT_MARKUP:
             delete_format(update, context)
         else:
-            update.message.reply_text("Guat? No entendí :/ (recuerda que soy un bot y soy tonto X'''D")
+            update.message.reply_text(
+                "Guat? No entendí :/ (recuerda que soy un bot y soy tonto X'''D")
     elif status == "categories":
         if text == ADD_CATEGORY_MARKUP:
             request_add_category(update, context)
@@ -1922,8 +1972,10 @@ def main():
     dp.add_handler(CommandHandler("stats", stats))
     dp.add_handler(CommandHandler("fix", fix))
 
-    dp.add_handler(MessageHandler(Filters.text & Filters.chat_type.private, process_private_message))
-    dp.add_handler(MessageHandler(Filters.photo & Filters.chat_type.private, process_private_photo))
+    dp.add_handler(MessageHandler(
+        Filters.text & Filters.chat_type.private, process_private_message))
+    dp.add_handler(MessageHandler(
+        Filters.photo & Filters.chat_type.private, process_private_photo))
 
     dp.add_handler(MessageHandler(Filters.chat_type.channel & (Filters.text | Filters.caption),
                                   process_channel_update))
@@ -1939,6 +1991,9 @@ def main():
                           port=int(PORT),
                           url_path=TOKEN,
                           webhook_url='https://forcegameshelper.herokuapp.com/' + TOKEN)
+
+    if admin_chat_id != -1:
+        bot.send_message(admin_chat_id, "Bot started")
 
     updater.idle()
 
